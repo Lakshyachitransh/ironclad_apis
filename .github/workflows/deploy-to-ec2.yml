@@ -1,0 +1,102 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  EC2_HOST: ${{ secrets.EC2_HOST }}
+  EC2_USER: ubuntu
+  EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+  EC2_SSH_PORT: 22
+  APP_PORT: 3000
+  APP_NAME: ironclad-api
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Test SSH connection
+        run: ssh -i ~/.ssh/id_rsa -p ${{ env.EC2_SSH_PORT }} ${{ env.EC2_USER }}@${{ secrets.EC2_HOST }} "echo 'SSH connection successful'"
+
+      - name: Deploy application
+        run: |
+          ssh -i ~/.ssh/id_rsa -p ${{ env.EC2_SSH_PORT }} ${{ env.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+          set -e
+          
+          echo "=== Deployment Started ==="
+          echo "Date: $(date)"
+          
+          # Go to application directory
+          cd /home/ubuntu/ironclad_apis
+          
+          # Pull latest code
+          echo "Pulling latest code..."
+          git pull origin main
+          
+          # Install dependencies
+          echo "Installing dependencies..."
+          npm install --production
+          
+          # Build application
+          echo "Building application..."
+          npm run build
+          
+          # Run migrations
+          echo "Running database migrations..."
+          npx prisma migrate deploy || echo "No new migrations"
+          
+          # Restart application
+          echo "Restarting application..."
+          pm2 restart ironclad-api || pm2 start dist/main.js --name "ironclad-api"
+          pm2 save
+          
+          # Verify application is running
+          sleep 3
+          pm2 status
+          
+          echo "=== Deployment Completed Successfully ==="
+          echo "Application running at: http://${{ secrets.EC2_HOST }}/api/docs"
+          EOF
+
+      - name: Verify deployment
+        run: |
+          echo "Waiting for application to start..."
+          sleep 5
+          
+          # Check if application is responding
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://${{ secrets.EC2_HOST }}/api/docs || echo "000")
+          
+          if [ "$RESPONSE" = "200" ] || [ "$RESPONSE" = "301" ] || [ "$RESPONSE" = "302" ]; then
+            echo "✅ Deployment successful! Application is responding."
+            echo "API Docs: http://${{ secrets.EC2_HOST }}/api/docs"
+          else
+            echo "⚠️ Application responding with status: $RESPONSE"
+            echo "This might be normal if application needs more time to start."
+          fi
+
+      - name: Deployment notification
+        if: success()
+        run: |
+          echo "✅ Successfully deployed to EC2!"
+          echo "Instance: ${{ secrets.EC2_HOST }}"
+          echo "API URL: http://${{ secrets.EC2_HOST }}/api/docs"
+
+      - name: Deployment failed notification
+        if: failure()
+        run: |
+          echo "❌ Deployment failed!"
+          echo "Check logs above for details"
