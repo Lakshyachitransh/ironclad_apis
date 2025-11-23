@@ -1,0 +1,683 @@
+# 🚀 EC2 Deployment - Initial Setup Guide
+
+This guide walks you through deploying the Ironclad APIs application to AWS EC2 for the **first time**. 
+
+## 📋 Prerequisites
+
+Before you begin, ensure you have:
+- ✅ AWS account with EC2 access
+- ✅ SSH client installed (Windows: PowerShell/PuTTY, Mac/Linux: Terminal)
+- ✅ Basic understanding of AWS console
+- ✅ (Optional) AWS S3 bucket for video uploads
+
+## 🎯 Deployment Overview
+
+This deployment uses:
+- **EC2 Instance**: Ubuntu 22.04 LTS
+- **Database**: PostgreSQL (local or RDS)
+- **Process Manager**: PM2
+- **Web Server**: Nginx (reverse proxy)
+- **Application**: NestJS with Prisma ORM
+
+---
+
+## Step 1: Create EC2 Instance (10 minutes)
+
+### 1.1 Launch Instance
+
+1. Go to [AWS Console](https://console.aws.amazon.com) → EC2 → **Launch Instance**
+
+2. **Configure Instance:**
+   ```
+   Name: ironclad-api-server
+   AMI: Ubuntu Server 22.04 LTS (Free tier eligible)
+   Instance Type: t3.medium (recommended) or t2.micro (free tier)
+   ```
+
+3. **Create Key Pair:**
+   - Click **"Create new key pair"**
+   - Name: `ironclad-ec2-key`
+   - Type: RSA
+   - Format: `.pem`
+   - Click **"Create key pair"** and save the downloaded `.pem` file
+   - **Important**: Keep this file secure! You'll need it for SSH access
+
+### 1.2 Configure Security Group
+
+Create security group with these **Inbound Rules**:
+
+| Type        | Protocol | Port Range | Source      | Description          |
+|-------------|----------|------------|-------------|----------------------|
+| SSH         | TCP      | 22         | My IP       | SSH access           |
+| HTTP        | TCP      | 80         | 0.0.0.0/0   | HTTP traffic         |
+| HTTPS       | TCP      | 443        | 0.0.0.0/0   | HTTPS traffic        |
+| Custom TCP  | TCP      | 3000       | 0.0.0.0/0   | NestJS API (temp)    |
+
+**Note**: Port 3000 is for testing. In production, access API only through Nginx (port 80/443).
+
+### 1.3 Configure Storage
+
+```
+Root Volume: 30 GB gp3 (General Purpose SSD)
+```
+
+### 1.4 Launch Instance
+
+1. Review settings
+2. Click **"Launch Instance"**
+3. Wait for instance to reach **"Running"** state (2-3 minutes)
+4. Note the **Public IPv4 address** (e.g., `54.123.45.67`)
+
+---
+
+## Step 2: Connect to EC2 Instance (5 minutes)
+
+### 2.1 Set Key Permissions
+
+**Windows PowerShell:**
+```powershell
+# Navigate to folder containing your .pem file
+cd C:\path\to\your\keys
+
+# Set file permissions (one-time setup)
+icacls "ironclad-ec2-key.pem" /inheritance:r /grant:r "$env:USERNAME:F"
+```
+
+**Mac/Linux:**
+```bash
+chmod 400 ~/path/to/ironclad-ec2-key.pem
+```
+
+### 2.2 SSH to Instance
+
+Replace `<YOUR_EC2_IP>` with your instance's public IP:
+
+**Windows PowerShell:**
+```powershell
+ssh -i "C:\path\to\ironclad-ec2-key.pem" ubuntu@<YOUR_EC2_IP>
+```
+
+**Mac/Linux:**
+```bash
+ssh -i ~/path/to/ironclad-ec2-key.pem ubuntu@<YOUR_EC2_IP>
+```
+
+**Expected Output:**
+```
+Welcome to Ubuntu 22.04 LTS
+ubuntu@ip-xxx-xx-xx-xx:~$
+```
+
+✅ **Success!** You're now connected to your EC2 instance.
+
+---
+
+## Step 3: Run Automated Deployment (5-7 minutes)
+
+The deployment script will automatically:
+- ✅ Install Node.js 18.x
+- ✅ Install PostgreSQL database
+- ✅ Install PM2 process manager
+- ✅ Clone the GitHub repository
+- ✅ Install dependencies
+- ✅ Generate Prisma Client
+- ✅ Build the application
+- ✅ Run database migrations
+- ✅ Start the application with PM2
+- ✅ Install and configure Nginx
+
+### 3.1 Download and Run Script
+
+```bash
+# Download deployment script
+cd /tmp
+curl -O https://raw.githubusercontent.com/Lakshyachitransh/ironclad_apis/main/deploy.sh
+
+# Make it executable
+chmod +x deploy.sh
+
+# Run the deployment script
+./deploy.sh
+```
+
+### 3.2 Enter Database Password
+
+When prompted, enter a strong password for the PostgreSQL database user:
+```
+Enter PostgreSQL password for ironclad_user (or press Enter for default):
+Password: [enter your password]
+```
+
+**Tip**: Press Enter to use the default password, or enter a strong custom password.
+
+**Important**: Save this password! You'll need it for database configuration.
+
+### 3.3 Wait for Completion
+
+The script will run for 5-7 minutes. You'll see progress messages like:
+```
+[1/13] Updating system packages...
+[2/13] Installing Node.js 18.x...
+[3/13] Installing PostgreSQL...
+...
+[13/13] Installing and configuring Nginx...
+✓ Deployment Completed Successfully!
+```
+
+---
+
+## Step 4: Configure Environment Variables (3 minutes)
+
+### 4.1 Edit .env File
+
+```bash
+cd /home/ubuntu/ironclad_apis
+nano .env
+```
+
+### 4.2 Update Required Values
+
+The deployment script created a `.env` file with defaults. Update these values:
+
+```bash
+# Database - Update if you changed the password
+DATABASE_URL="postgresql://ironclad_user:YOUR_PASSWORD@localhost:5432/ironclad"
+
+# JWT Secret - Already generated, but verify it's strong
+JWT_SECRET="<auto-generated-secret>"
+
+# AWS S3 - Get these from AWS IAM Console
+AWS_REGION="us-east-1"                    # Your AWS region
+AWS_ACCESS_KEY_ID="AKIAXXXXXXXXXXXXX"     # Your AWS access key
+AWS_SECRET_ACCESS_KEY="xxxxxxxxxxxxx"     # Your AWS secret key
+AWS_S3_BUCKET="your-bucket-name"          # Your S3 bucket name
+
+# CORS - Update for your frontend domain
+CORS_ORIGIN="https://yourdomain.com"      # Or "*" for development
+```
+
+### 4.3 Save Changes
+
+Press: `Ctrl + O` → `Enter` → `Ctrl + X`
+
+### 4.4 Restart Application
+
+```bash
+pm2 restart ironclad-api
+```
+
+**Verify restart:**
+```bash
+pm2 logs ironclad-api --lines 20
+```
+
+You should see logs showing the application starting successfully.
+
+---
+
+## Step 5: Verify Deployment (2 minutes)
+
+### 5.1 Check Application Status
+
+```bash
+# Check PM2 status
+pm2 status
+```
+
+Expected output:
+```
+┌─────┬────────────────┬─────────┬──────┬───────┐
+│ id  │ name           │ status  │ cpu  │ mem   │
+├─────┼────────────────┼─────────┼──────┼───────┤
+│ 0   │ ironclad-api   │ online  │ 0%   │ 45 MB │
+└─────┴────────────────┴─────────┴──────┴───────┘
+```
+
+✅ Status should be **"online"**
+
+### 5.2 Check Nginx Status
+
+```bash
+sudo systemctl status nginx
+```
+
+Should show: **"active (running)"**
+
+### 5.3 Test API Endpoints
+
+**From EC2 instance:**
+```bash
+# Test local API
+curl http://localhost:3000/api/docs
+
+# Test through Nginx
+curl http://localhost/api/docs
+```
+
+**From your computer (browser):**
+```
+http://<YOUR_EC2_IP>/api/docs
+```
+
+✅ **Success!** You should see the Swagger API documentation page.
+
+### 5.4 Test Database Connection
+
+```bash
+psql -h localhost -U ironclad_user -d ironclad -c "SELECT COUNT(*) FROM \"_prisma_migrations\";"
+```
+
+Enter the database password when prompted. This verifies database is working.
+
+---
+
+## Step 6: Setup GitHub Actions (Optional, 10 minutes)
+
+Enable automatic deployments when you push code to GitHub.
+
+### 6.1 Add GitHub Secrets
+
+1. Go to your GitHub repository: `https://github.com/Lakshyachitransh/ironclad_apis`
+2. Click **Settings** → **Secrets and variables** → **Actions**
+3. Click **"New repository secret"**
+
+Add these secrets:
+
+**Secret 1: EC2_HOST**
+```
+Name: EC2_HOST
+Value: <YOUR_EC2_PUBLIC_IP>
+```
+
+**Secret 2: EC2_SSH_KEY**
+```
+Name: EC2_SSH_KEY
+Value: <Contents of your .pem file>
+```
+
+To get your .pem file contents:
+- **Windows**: Open file in Notepad, copy all content
+- **Mac/Linux**: `cat ~/path/to/ironclad-ec2-key.pem`
+
+Copy the entire content including:
+```
+-----BEGIN RSA PRIVATE KEY-----
+...
+-----END RSA PRIVATE KEY-----
+```
+
+### 6.2 Test GitHub Actions
+
+1. Make a small change to README.md
+2. Commit and push to main branch:
+   ```bash
+   git add .
+   git commit -m "test: Trigger deployment"
+   git push origin main
+   ```
+3. Go to **Actions** tab in GitHub
+4. Watch the deployment workflow run
+
+✅ When complete, your changes are deployed automatically!
+
+---
+
+## Step 7: Setup SSL Certificate (Optional, 10 minutes)
+
+Enable HTTPS for secure connections.
+
+### Prerequisites
+- Domain name pointing to your EC2 IP address
+- DNS records propagated (can take up to 48 hours)
+
+### 7.1 Install Certbot
+
+```bash
+sudo apt-get install -y certbot python3-certbot-nginx
+```
+
+### 7.2 Stop Nginx Temporarily
+
+```bash
+sudo systemctl stop nginx
+```
+
+### 7.3 Get SSL Certificate
+
+Replace `yourdomain.com` with your actual domain:
+
+```bash
+sudo certbot certonly --standalone -d yourdomain.com -d www.yourdomain.com
+```
+
+Follow the prompts:
+- Enter email address
+- Agree to terms
+- Choose whether to share email with EFF
+
+Certificate will be saved to:
+```
+/etc/letsencrypt/live/yourdomain.com/fullchain.pem
+/etc/letsencrypt/live/yourdomain.com/privkey.pem
+```
+
+### 7.4 Update Nginx Configuration
+
+```bash
+sudo nano /etc/nginx/sites-available/ironclad-api
+```
+
+Add HTTPS server block:
+
+```nginx
+# Redirect HTTP to HTTPS
+server {
+    listen 80;
+    server_name yourdomain.com www.yourdomain.com;
+    return 301 https://$server_name$request_uri;
+}
+
+# HTTPS server
+server {
+    listen 443 ssl http2;
+    server_name yourdomain.com www.yourdomain.com;
+
+    ssl_certificate /etc/letsencrypt/live/yourdomain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/yourdomain.com/privkey.pem;
+    
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+
+    client_max_body_size 500M;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```
+
+### 7.5 Test and Restart Nginx
+
+```bash
+# Test configuration
+sudo nginx -t
+
+# Restart Nginx
+sudo systemctl start nginx
+sudo systemctl restart nginx
+```
+
+### 7.6 Setup Auto-Renewal
+
+```bash
+# Enable certbot timer
+sudo systemctl enable certbot.timer
+sudo systemctl start certbot.timer
+
+# Check timer status
+sudo systemctl status certbot.timer
+```
+
+✅ Your SSL certificate will auto-renew before expiration!
+
+### 7.7 Verify HTTPS
+
+Visit: `https://yourdomain.com/api/docs`
+
+You should see a secure padlock icon in your browser! 🔒
+
+---
+
+## 🎉 Deployment Complete!
+
+Your Ironclad APIs application is now live!
+
+### Access Your API
+
+- **Swagger Docs**: `http://<YOUR_EC2_IP>/api/docs`
+- **API Base URL**: `http://<YOUR_EC2_IP>/api`
+- **With SSL**: `https://yourdomain.com/api/docs`
+
+### Common API Endpoints
+
+```bash
+# Register new user
+POST http://<YOUR_EC2_IP>/api/auth/register
+
+# Login
+POST http://<YOUR_EC2_IP>/api/auth/login
+
+# Get courses (requires auth token)
+GET http://<YOUR_EC2_IP>/api/courses
+
+# View all endpoints
+http://<YOUR_EC2_IP>/api/docs
+```
+
+---
+
+## 📊 Useful Commands
+
+### Application Management
+
+```bash
+# Check application status
+pm2 status
+
+# View logs
+pm2 logs ironclad-api
+
+# View last 50 log lines
+pm2 logs ironclad-api --lines 50
+
+# Restart application
+pm2 restart ironclad-api
+
+# Stop application
+pm2 stop ironclad-api
+
+# Monitor application
+pm2 monit
+```
+
+### Database Management
+
+```bash
+# Connect to database
+psql -h localhost -U ironclad_user -d ironclad
+
+# List tables
+psql -h localhost -U ironclad_user -d ironclad -c "\dt"
+
+# Backup database
+pg_dump -U ironclad_user -d ironclad > ~/backup-$(date +%Y%m%d).sql
+
+# Restore database
+psql -U ironclad_user -d ironclad < ~/backup-*.sql
+```
+
+### System Management
+
+```bash
+# Check Nginx status
+sudo systemctl status nginx
+
+# Restart Nginx
+sudo systemctl restart nginx
+
+# View Nginx logs
+sudo tail -f /var/log/nginx/error.log
+sudo tail -f /var/log/nginx/access.log
+
+# Update system
+sudo apt update && sudo apt upgrade -y
+```
+
+### Deployment Updates
+
+```bash
+cd /home/ubuntu/ironclad_apis
+
+# Pull latest code
+git pull origin main
+
+# Install dependencies
+npm install
+
+# Generate Prisma Client
+npx prisma generate
+
+# Build application
+npm run build
+
+# Run migrations
+npx prisma migrate deploy
+
+# Restart application
+pm2 restart ironclad-api
+```
+
+---
+
+## 🐛 Troubleshooting
+
+### Application Not Starting
+
+```bash
+# Check logs for errors
+pm2 logs ironclad-api --lines 100 --err
+
+# Check if port is in use
+sudo lsof -i :3000
+
+# Restart from scratch
+pm2 delete ironclad-api
+pm2 start /home/ubuntu/ironclad_apis/dist/main.js --name "ironclad-api"
+pm2 save
+```
+
+### Database Connection Issues
+
+```bash
+# Check PostgreSQL is running
+sudo systemctl status postgresql
+
+# Restart PostgreSQL
+sudo systemctl restart postgresql
+
+# Test database connection
+psql -h localhost -U ironclad_user -d ironclad -c "SELECT 1"
+
+# Check .env file
+cat /home/ubuntu/ironclad_apis/.env | grep DATABASE_URL
+```
+
+### Nginx 502 Bad Gateway
+
+```bash
+# Check if application is running
+pm2 status
+
+# Check Nginx configuration
+sudo nginx -t
+
+# Restart both services
+pm2 restart ironclad-api
+sudo systemctl restart nginx
+```
+
+### Can't Access API from Browser
+
+1. **Check Security Group**: Ensure port 80 (and 3000 for testing) are open
+2. **Check Nginx**: `sudo systemctl status nginx`
+3. **Check Application**: `pm2 status` should show "online"
+4. **Check from EC2**: `curl http://localhost:3000/api/docs`
+
+### Port 3000 Already in Use
+
+```bash
+# Find process using port 3000
+sudo lsof -i :3000
+
+# Kill the process (replace PID with actual process ID)
+kill -9 <PID>
+
+# Or stop all PM2 processes
+pm2 kill
+
+# Restart application
+cd /home/ubuntu/ironclad_apis
+pm2 start dist/main.js --name "ironclad-api"
+pm2 save
+```
+
+---
+
+## 🔒 Security Checklist
+
+After deployment, improve security:
+
+- [ ] Change default database password to a strong one
+- [ ] Restrict security group SSH access to your IP only
+- [ ] Remove port 3000 from security group (access only via Nginx)
+- [ ] Setup SSL certificate for HTTPS
+- [ ] Enable AWS CloudWatch monitoring
+- [ ] Setup database backups
+- [ ] Restrict PostgreSQL access (edit `/etc/postgresql/*/main/pg_hba.conf`)
+- [ ] Setup firewall rules with UFW
+- [ ] Disable SSH password authentication
+- [ ] Enable fail2ban for SSH protection
+
+---
+
+## 📈 Cost Estimation
+
+### Free Tier (First 12 months)
+- EC2 t2.micro: **Free**
+- 30 GB storage: **Free**
+- **Total: $0/month**
+
+### Small Production
+- EC2 t3.medium: **$30/month**
+- 50 GB storage: **$5/month**
+- **Total: ~$35/month**
+
+### Medium Production
+- EC2 t3.large: **$60/month**
+- RDS db.t3.small: **$60/month**
+- 100 GB storage: **$10/month**
+- **Total: ~$130/month**
+
+---
+
+## 📚 Additional Resources
+
+- **Full Deployment Guide**: See `AWS_EC2_DEPLOYMENT_GUIDE.md`
+- **Quick Reference**: See `EC2_DEPLOYMENT_CARD.md`
+- **Verification Checklist**: See `DEPLOYMENT_CHECKLIST.md`
+- **NestJS Docs**: https://docs.nestjs.com
+- **AWS EC2 Docs**: https://docs.aws.amazon.com/ec2/
+- **PM2 Docs**: https://pm2.keymetrics.io/docs/
+
+---
+
+## 🆘 Need Help?
+
+1. Check deployment logs: `pm2 logs ironclad-api`
+2. Review troubleshooting section above
+3. Check comprehensive guide: `AWS_EC2_DEPLOYMENT_GUIDE.md`
+4. Verify checklist: `DEPLOYMENT_CHECKLIST.md`
+
+---
+
+**Congratulations! Your API is now deployed and running on AWS EC2!** 🚀
+
+Access it at: `http://<YOUR_EC2_IP>/api/docs`

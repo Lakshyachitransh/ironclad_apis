@@ -51,6 +51,10 @@ jobs:
           echo "Installing dependencies..."
           npm install --production
           
+          # Generate Prisma Client
+          echo "Generating Prisma Client..."
+          npx prisma generate
+          
           # Build application
           echo "Building application..."
           npm run build
