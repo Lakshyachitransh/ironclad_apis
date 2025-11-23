@@ -42,6 +42,12 @@ lerna-debug.log*
 .env.production.local
 .env.local
 
+# SSH keys and certificates
+*.pem
+*.key
+*.crt
+*.cert
+
 # temp directory
 .temp
 .tmp

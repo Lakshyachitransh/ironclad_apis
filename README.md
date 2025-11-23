@@ -59,16 +59,46 @@ $ npm run test:cov
 
 ## Deployment
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+### 🚀 Deploy to AWS EC2 (Recommended)
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+This application is **ready for AWS EC2 deployment** with complete automation and documentation.
 
+**Quick Start (5 minutes):**
+```bash
+# 1. Create EC2 instance (Ubuntu 22.04 LTS)
+# 2. SSH to your instance
+ssh -i "your-key.pem" ubuntu@<EC2_IP>
+
+# 3. Run automated deployment
+curl -O https://raw.githubusercontent.com/Lakshyachitransh/ironclad_apis/main/deploy.sh
+chmod +x deploy.sh
+./deploy.sh
+
+# 4. Configure environment and restart
+cd /home/ubuntu/ironclad_apis
+nano .env  # Update AWS credentials
+pm2 restart ironclad-api
+
+# 5. Access your API
+# http://<EC2_IP>/api/docs
+```
+
+**Complete Documentation:**
+- **[START_HERE.md](./START_HERE.md)** - Quick overview and links
+- **[EC2_INITIAL_SETUP.md](./EC2_INITIAL_SETUP.md)** - Step-by-step deployment guide
+- **[DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md)** - Master reference
+- **[GITHUB_ACTIONS_SETUP_GUIDE.md](./GITHUB_ACTIONS_SETUP_GUIDE.md)** - CI/CD automation
+
+### Other Deployment Options
+
+For other deployment platforms, check out the [NestJS deployment documentation](https://docs.nestjs.com/deployment).
+
+For AWS managed deployment with [Mau](https://mau.nestjs.com):
 ```bash
 $ npm install -g @nestjs/mau
 $ mau deploy
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
 
 ## Resources
 

@@ -13,6 +13,7 @@ echo "=========================================="
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
+RED='\033[0;31m'
 NC='\033[0m' # No Color
 
 # Step 1: Update System
@@ -106,24 +107,33 @@ echo -e "${BLUE}[8/12] Installing dependencies...${NC}"
 npm install
 echo -e "${GREEN}✓ Dependencies installed${NC}\n"
 
-# Step 9: Build Project
-echo -e "${BLUE}[9/12] Building project...${NC}"
+# Step 9: Generate Prisma Client
+echo -e "${BLUE}[9/13] Generating Prisma Client...${NC}"
+if npx prisma generate; then
+  echo -e "${GREEN}✓ Prisma Client generated${NC}\n"
+else
+  echo -e "${RED}✗ Failed to generate Prisma Client${NC}\n"
+  exit 1
+fi
+
+# Step 10: Build Project
+echo -e "${BLUE}[10/13] Building project...${NC}"
 npm run build
 echo -e "${GREEN}✓ Project built${NC}\n"
 
-# Step 10: Run Migrations
-echo -e "${BLUE}[10/12] Running Prisma migrations...${NC}"
+# Step 11: Run Migrations
+echo -e "${BLUE}[11/13] Running Prisma migrations...${NC}"
 npx prisma migrate deploy
 echo -e "${GREEN}✓ Migrations completed${NC}\n"
 
-# Step 11: Start with PM2
-echo -e "${BLUE}[11/12] Starting application with PM2...${NC}"
+# Step 12: Start with PM2
+echo -e "${BLUE}[12/13] Starting application with PM2...${NC}"
 pm2 start dist/main.js --name "ironclad-api" --instances max
 pm2 save
 echo -e "${GREEN}✓ Application started${NC}\n"
 
-# Step 12: Install and Configure Nginx
-echo -e "${BLUE}[12/12] Installing and configuring Nginx...${NC}"
+# Step 13: Install and Configure Nginx
+echo -e "${BLUE}[13/13] Installing and configuring Nginx...${NC}"
 sudo apt-get install -y nginx
 
 sudo tee /etc/nginx/sites-available/ironclad-api > /dev/null << 'NGINX_EOF'

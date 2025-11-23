@@ -51,6 +51,13 @@ jobs:
           echo "Installing dependencies..."
           npm install --production
           
+          # Generate Prisma Client
+          echo "Generating Prisma Client..."
+          if ! npx prisma generate; then
+            echo "ERROR: Failed to generate Prisma Client"
+            exit 1
+          fi
+          
           # Build application
           echo "Building application..."
           npm run build
