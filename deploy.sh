@@ -13,6 +13,7 @@ echo "=========================================="
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
+RED='\033[0;31m'
 NC='\033[0m' # No Color
 
 # Step 1: Update System
@@ -108,8 +109,12 @@ echo -e "${GREEN}✓ Dependencies installed${NC}\n"
 
 # Step 9: Generate Prisma Client
 echo -e "${BLUE}[9/13] Generating Prisma Client...${NC}"
-npx prisma generate
-echo -e "${GREEN}✓ Prisma Client generated${NC}\n"
+if npx prisma generate; then
+  echo -e "${GREEN}✓ Prisma Client generated${NC}\n"
+else
+  echo -e "${RED}✗ Failed to generate Prisma Client${NC}\n"
+  exit 1
+fi
 
 # Step 10: Build Project
 echo -e "${BLUE}[10/13] Building project...${NC}"
