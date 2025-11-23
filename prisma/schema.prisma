@@ -1,0 +1,289 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id                String                     @id @default(uuid())
+  name              String                     @unique
+  status            String                     @default("active")
+  createdAt         DateTime                   @default(now())
+  users             UserTenant[]
+  courses           Course[]
+  licenses          TenantApplicationLicense[]
+  liveClasses       LiveClass[]
+  courseAssignments CourseAssignment[]
+  userProgress      UserProgress[]
+  lessonProgress    LessonProgress[]
+}
+
+model Application {
+  id       String                     @id @default(uuid())
+  code     String                     @unique
+  name     String
+  licenses TenantApplicationLicense[]
+}
+
+model TenantApplicationLicense {
+  id            String      @id @default(uuid())
+  tenant        Tenant      @relation(fields: [tenantId], references: [id])
+  tenantId      String
+  application   Application @relation(fields: [applicationId], references: [id])
+  applicationId String
+  plan          String?
+  seats         Int?        @default(0)
+  startAt       DateTime?
+  endAt         DateTime?
+  status        String      @default("active")
+  createdAt     DateTime    @default(now())
+}
+
+model User {
+  id             String           @id @default(uuid())
+  email          String           @unique
+  passwordHash   String
+  displayName    String?
+  status         String           @default("active")
+  createdAt      DateTime         @default(now())
+  tenants        UserTenant[]
+  refreshTokens  RefreshToken[]
+  userProgress   UserProgress[]
+  lessonProgress LessonProgress[]
+}
+
+model UserTenant {
+  id        String   @id @default(uuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  tenantId  String
+  roles     String[] @default([])
+  createdAt DateTime @default(now())
+
+  @@unique([userId, tenantId], name: "user_id_tenant_id") // <-- add this
+  @@index([tenantId])
+  @@index([userId])
+}
+
+model Role {
+  id          String           @id @default(uuid())
+  code        String           @unique
+  name        String
+  permissions RolePermission[]
+}
+
+model Permission {
+  id              String           @id @default(uuid())
+  code            String           @unique
+  name            String
+  rolePermissions RolePermission[]
+}
+
+model RolePermission {
+  id           String     @id @default(uuid())
+  role         Role       @relation(fields: [roleId], references: [id])
+  roleId       String
+  permission   Permission @relation(fields: [permissionId], references: [id])
+  permissionId String
+}
+
+model Course {
+  id                String             @id @default(uuid())
+  tenant            Tenant             @relation(fields: [tenantId], references: [id])
+  tenantId          String
+  title             String
+  summary           String?
+  level             String?
+  status            String             @default("draft")
+  ownerUserId       String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  modules           Module[]
+  courseAssignments CourseAssignment[]
+  userProgress      UserProgress[]
+}
+
+model Module {
+  id           String   @id @default(uuid())
+  course       Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  courseId     String
+  title        String
+  description  String?
+  displayOrder Int      @default(0)
+  status       String   @default("draft")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  lessons      Lesson[]
+
+  @@index([courseId])
+}
+
+model Lesson {
+  id               String           @id @default(uuid())
+  module           Module           @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  moduleId         String
+  title            String
+  description      String?
+  videoUrl         String?
+  videoDuration    Int? // duration in seconds
+  videoFileName    String?
+  displayOrder     Int              @default(0)
+  status           String           @default("draft")
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  lessonProgresses LessonProgress[]
+
+  @@index([moduleId])
+}
+
+model LiveClass {
+  id              String                 @id @default(uuid())
+  tenant          Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId        String
+  createdBy       String // user ID of teacher
+  title           String
+  description     String?
+  status          String                 @default("scheduled") // scheduled, live, ended, cancelled
+  scheduledAt     DateTime
+  startedAt       DateTime?
+  endedAt         DateTime?
+  maxParticipants Int                    @default(200) // max capacity
+  roomId          String                 @unique // unique identifier for the live class room
+  recordingUrl    String? // S3 URL for the recording
+  participants    LiveClassParticipant[]
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  @@index([tenantId])
+  @@index([createdBy])
+  @@index([status])
+  @@index([scheduledAt])
+}
+
+model LiveClassParticipant {
+  id          String    @id @default(uuid())
+  liveClass   LiveClass @relation(fields: [liveClassId], references: [id], onDelete: Cascade)
+  liveClassId String
+  userId      String // participant user ID
+  joinedAt    DateTime  @default(now())
+  leftAt      DateTime?
+  role        String    @default("participant") // teacher, participant
+  createdAt   DateTime  @default(now())
+
+  @@unique([liveClassId, userId])
+  @@index([liveClassId])
+  @@index([userId])
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  tokenHash String
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  ip        String?
+  ua        String?
+
+  @@index([userId])
+}
+
+model CourseAssignment {
+  id           String         @id @default(uuid())
+  tenant       Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId     String
+  course       Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  courseId     String
+  assignedTo   String // user ID
+  assignedBy   String // admin/manager user ID
+  status       String         @default("assigned") // assigned, started, completed, expired
+  dueDate      DateTime?
+  assignedAt   DateTime       @default(now())
+  completedAt  DateTime?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  userProgress UserProgress[]
+
+  @@index([tenantId])
+  @@index([courseId])
+  @@index([assignedTo])
+  @@index([status])
+}
+
+model UserProgress {
+  id                 String           @id @default(uuid())
+  tenant             Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId           String
+  user               User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId             String
+  course             Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  courseId           String
+  courseAssignment   CourseAssignment @relation(fields: [courseAssignmentId], references: [id], onDelete: Cascade)
+  courseAssignmentId String
+  lessonsCompleted   Int              @default(0)
+  lessonsTotal       Int              @default(0)
+  progressPercentage Float            @default(0)
+  status             String           @default("not_started") // not_started, in_progress, completed
+  startedAt          DateTime?
+  completedAt        DateTime?
+  lastAccessedAt     DateTime?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  lessonProgress     LessonProgress[]
+
+  @@unique([userId, courseId])
+  @@index([tenantId])
+  @@index([userId])
+  @@index([courseId])
+  @@index([status])
+}
+
+model LessonProgress {
+  id              String       @id @default(uuid())
+  tenant          Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId        String
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId          String
+  lesson          Lesson       @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  lessonId        String
+  userProgress    UserProgress @relation(fields: [userProgressId], references: [id], onDelete: Cascade)
+  userProgressId  String
+  status          String       @default("not_started") // not_started, in_progress, completed
+  watchedDuration Int          @default(0) // seconds watched
+  isCompleted     Boolean      @default(false)
+  completedAt     DateTime?
+  startedAt       DateTime?
+  lastAccessedAt  DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@unique([userId, lessonId])
+  @@index([tenantId])
+  @@index([userId])
+  @@index([lessonId])
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  tenantId    String?
+  actorUserId String?
+  action      String
+  entity      String
+  entityId    String?
+  payload     String?
+  ip          String?
+  ua          String?
+  createdAt   DateTime @default(now())
+}

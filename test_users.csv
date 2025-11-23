@@ -1,0 +1,4 @@
+email,displayName,password,roles
+user1@example.com,John Doe,,learner
+user2@example.com,Jane Smith,,learner|viewer
+user3@example.com,Bob Johnson,SecurePass123,training_manager
