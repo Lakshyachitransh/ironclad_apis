@@ -18,5 +18,6 @@ import { AdminModule } from './admin/admin.module';
     })],
   controllers: [AppController],
   providers: [AppService, PrismaService],
+  exports: [PrismaService],
 })
 export class AppModule {}
