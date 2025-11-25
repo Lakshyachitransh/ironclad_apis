@@ -1,10 +1,11 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, ConflictException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as fs from 'fs';
 import * as path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { PrismaService } from '../prisma/prisma.service';
+import * as bcrypt from 'bcrypt';
 
 const execAsync = promisify(exec);
 
@@ -338,6 +339,92 @@ export class AdminService {
       return this.getAllUsersWithCourseAssignments(tenantId);
     } catch (error) {
       throw new BadRequestException(`Failed to fetch tenant users: ${error.message}`);
+    }
+  }
+
+  /**
+   * Create a tenant admin user for a specific tenant
+   * org_admin only endpoint
+   */
+  async createTenantAdmin(data: {
+    tenantId: string;
+    email: string;
+    displayName: string;
+    password: string;
+  }) {
+    try {
+      const { tenantId, email, displayName, password } = data;
+
+      if (!tenantId || !email || !displayName || !password) {
+        throw new BadRequestException('tenantId, email, displayName, and password are required');
+      }
+
+      // Verify tenant exists
+      const tenant = await this.prisma.tenant.findUnique({
+        where: { id: tenantId }
+      });
+
+      if (!tenant) {
+        throw new BadRequestException('Tenant not found');
+      }
+
+      // Check if user already exists
+      const existingUser = await this.prisma.user.findUnique({
+        where: { email }
+      });
+
+      if (existingUser) {
+        throw new ConflictException('User with this email already exists');
+      }
+
+      // Hash password
+      const saltRounds = parseInt(process.env.BCRYPT_SALT_ROUNDS || '12', 10);
+      const passwordHash = await bcrypt.hash(password, saltRounds);
+
+      // Create user
+      const user = await this.prisma.user.create({
+        data: {
+          email,
+          displayName,
+          passwordHash,
+          status: 'active'
+        }
+      });
+
+      // Assign user to tenant with tenant_admin role
+      const userTenant = await this.prisma.userTenant.create({
+        data: {
+          userId: user.id,
+          tenantId,
+          roles: ['tenant_admin']
+        }
+      });
+
+      return {
+        success: true,
+        message: 'Tenant admin created successfully',
+        user: {
+          id: user.id,
+          email: user.email,
+          displayName: user.displayName,
+          status: user.status,
+          createdAt: user.createdAt
+        },
+        tenant: {
+          id: tenant.id,
+          name: tenant.name
+        },
+        roles: ['tenant_admin'],
+        userTenantId: userTenant.id
+      };
+    } catch (error) {
+      if (error instanceof ConflictException) {
+        throw error;
+      }
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new BadRequestException(`Failed to create tenant admin: ${error.message}`);
     }
   }
 }
