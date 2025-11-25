@@ -180,7 +180,41 @@ export class AdminService {
    */
   async getAllUsersWithCourseAssignments(tenantId?: string) {
     try {
-      const whereClause = tenantId ? { tenantId } : {};
+      // Get all users first
+      let allUsers;
+      if (tenantId) {
+        // Get users for specific tenant
+        allUsers = await this.prisma.user.findMany({
+          where: {
+            tenants: {
+              some: {
+                tenantId: tenantId
+              }
+            }
+          },
+          select: {
+            id: true,
+            email: true,
+            displayName: true,
+            status: true
+          }
+        });
+      } else {
+        // Get all users
+        allUsers = await this.prisma.user.findMany({
+          select: {
+            id: true,
+            email: true,
+            displayName: true,
+            status: true
+          }
+        });
+      }
+
+      const userIds = allUsers.map(u => u.id);
+      const whereClause = tenantId 
+        ? { tenantId, assignedTo: { in: userIds } }
+        : { assignedTo: { in: userIds } };
 
       // Get all course assignments with related data
       const courseAssignments = await this.prisma.courseAssignment.findMany({
@@ -212,39 +246,39 @@ export class AdminService {
         }
       });
 
-      // Get user details
-      const userIds = [...new Set(courseAssignments.map(ca => ca.assignedTo))];
-      const users = await this.prisma.user.findMany({
-        where: {
-          id: { in: userIds }
-        },
-        select: {
-          id: true,
-          email: true,
-          displayName: true,
-          status: true
-        }
-      });
+      const userMap = new Map<string, {id: string; email: string; displayName: string | null; status: string}>(allUsers.map(u => [u.id, u]));
 
-      const userMap = new Map(users.map(u => [u.id, u]));
-
-      // Group by user and build response
+      // Group by user and build response - include all users
       const groupedByUser: Record<string, any> = {};
 
-      courseAssignments.forEach(ca => {
-        const user = userMap.get(ca.assignedTo);
-        if (!user) return;
+      // Initialize all users first
+      allUsers.forEach(user => {
+        groupedByUser[user.id] = {
+          userId: user.id,
+          email: user.email,
+          displayName: user.displayName,
+          status: user.status,
+          totalCoursesAssigned: 0,
+          coursesCompleted: 0,
+          courseAssignments: []
+        };
+      });
 
+      // Add course assignments
+      courseAssignments.forEach(ca => {
         if (!groupedByUser[ca.assignedTo]) {
-          groupedByUser[ca.assignedTo] = {
-            userId: ca.assignedTo,
-            email: user.email,
-            displayName: user.displayName,
-            status: user.status,
-            totalCoursesAssigned: 0,
-            coursesCompleted: 0,
-            courseAssignments: []
-          };
+          const userData = userMap.get(ca.assignedTo);
+          if (userData) {
+            groupedByUser[ca.assignedTo] = {
+              userId: ca.assignedTo,
+              email: userData.email,
+              displayName: userData.displayName,
+              status: userData.status,
+              totalCoursesAssigned: 0,
+              coursesCompleted: 0,
+              courseAssignments: []
+            };
+          }
         }
 
         const userProgress = ca.userProgress[0];
