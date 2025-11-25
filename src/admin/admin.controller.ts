@@ -2,15 +2,17 @@ import { Controller, Post, Get, Body, UseGuards, HttpCode, HttpStatus, Param, Qu
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import { OrgAdminGuard } from '../common/guards/org-admin.guard';
+import { RolesGuard } from '../roles/roles.guard';
+import { Roles } from '../roles/roles.decorator';
 
 @ApiTags('admin')
 @ApiBearerAuth('access-token')
 @Controller('admin')
-@UseGuards(JwtAuthGuard, OrgAdminGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class AdminController {
   constructor(private adminService: AdminService) {}
 
+  @Roles('org_admin')
   @Post('database/update-config')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -64,6 +66,7 @@ Example:
     );
   }
 
+  @Roles('org_admin')
   @Post('database/migrate')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -90,6 +93,7 @@ Only org_admin role can access this endpoint.`
     return this.adminService.runMigrations();
   }
 
+  @Roles('org_admin')
   @Post('database/update-and-migrate')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -153,6 +157,7 @@ Example:
     );
   }
 
+  @Roles('org_admin')
   @Get('database/current-config')
   @ApiOperation({
     summary: 'Get current database configuration',
@@ -179,6 +184,7 @@ Only org_admin role can access this endpoint.`
     return this.adminService.getCurrentDatabaseConfig();
   }
 
+  @Roles('org_admin')
   @Get('users/all-with-courses')
   @ApiOperation({
     summary: 'Get all users across all tenants with course assignments',
@@ -238,6 +244,7 @@ Only org_admin role can access this endpoint.`
     return this.adminService.getAllUsersWithCourseAssignments();
   }
 
+  @Roles('org_admin')
   @Get('users/tenant/:tenantId/with-courses')
   @ApiOperation({
     summary: 'Get users for a specific tenant with course assignments',
@@ -291,6 +298,7 @@ Only org_admin role can access this endpoint.`
     return this.adminService.getTenantUsersWithCourseAssignments(tenantId);
   }
 
+  @Roles('org_admin')
   @Post('tenants/:tenantId/create-admin')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({

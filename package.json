@@ -19,7 +19,11 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "prisma:seed": "ts-node --transpile-only prisma/seed.ts"
+    "prisma:seed": "ts-node --transpile-only prisma/seed.ts",
+    "prisma:generate": "prisma generate",
+    "rbac:clean": "prisma db execute --stdin < prisma/clean-rbac.sql",
+    "rbac:seed": "ts-node --transpile-only -O '{\"module\":\"commonjs\"}' prisma/seed-rbac.ts",
+    "rbac:reset": "npm run rbac:clean && npm run rbac:seed"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
