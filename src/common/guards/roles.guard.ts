@@ -77,6 +77,11 @@ export class RolesGuard implements CanActivate {
       }
     }
 
+    // If tenantId still not found, use user's tenantId from token (for tenant-scoped endpoints)
+    if (!tenantId && user?.tenantId) {
+      tenantId = user.tenantId;
+    }
+
     if (!user || !tenantId) throw new ForbiddenException('user or tenant missing');
 
     // Check if user is org_admin - if so, allow access to any tenant
