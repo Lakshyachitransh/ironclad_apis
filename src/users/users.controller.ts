@@ -45,6 +45,17 @@ export class UsersController {
     status: 201, 
     description: 'User created successfully and attached to tenant',
     schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', example: '123e4567-e89b-12d3-a456-426614174000' },
+        email: { type: 'string', example: 'newuser@example.com' },
+        displayName: { type: 'string', example: 'John Doe' },
+        status: { type: 'string', example: 'active' },
+        createdAt: { type: 'string', format: 'date-time', example: '2025-11-22T19:00:00Z' },
+        tenantName: { type: 'string', example: 'Tech Academy' },
+        roles: { type: 'array', items: { type: 'string' }, example: ['learner'] },
+        userTenantId: { type: 'string', example: '223e4567-e89b-12d3-a456-426614174001' }
+      },
       example: {
         id: '123e4567-e89b-12d3-a456-426614174000',
         email: 'newuser@example.com',
@@ -90,15 +101,33 @@ export class UsersController {
   })
   @ApiResponse({ 
     status: 200, 
-    description: 'List of users',
+    description: 'List of users in tenant',
     schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', example: '123e4567-e89b-12d3-a456-426614174000' },
+          email: { type: 'string', example: 'user@example.com' },
+          displayName: { type: 'string', example: 'John Doe' },
+          roles: { type: 'array', items: { type: 'string' }, example: ['learner'] },
+          createdAt: { type: 'string', format: 'date-time', example: '2025-11-19T10:00:00Z' }
+        }
+      },
       example: [
         {
           id: '123e4567-e89b-12d3-a456-426614174000',
-          email: 'user@example.com',
+          email: 'john@example.com',
           displayName: 'John Doe',
           roles: ['learner'],
           createdAt: '2025-11-19T10:00:00Z'
+        },
+        {
+          id: '223e4567-e89b-12d3-a456-426614174001',
+          email: 'jane@example.com',
+          displayName: 'Jane Smith',
+          roles: ['learner', 'viewer'],
+          createdAt: '2025-11-20T14:30:00Z'
         }
       ]
     }
@@ -167,8 +196,40 @@ user3@example.com,Bob Johnson,SecurePass123,training_manager`
   })
   @ApiResponse({ 
     status: 201, 
-    description: 'Bulk upload completed',
+    description: 'Bulk upload completed with results',
     schema: {
+      type: 'object',
+      properties: {
+        tenantId: { type: 'string', example: '456e7890-e89b-12d3-a456-426614174000' },
+        total: { type: 'number', example: 3 },
+        successful: { type: 'number', example: 2 },
+        failed: { type: 'number', example: 1 },
+        results: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              email: { type: 'string', example: 'user@example.com' },
+              displayName: { type: 'string', example: 'John Doe' },
+              userId: { type: 'string', example: '123e4567-e89b-12d3-a456-426614174000' },
+              roles: { type: 'array', items: { type: 'string' }, example: ['learner'] },
+              password: { type: 'string', example: 'abc123def456Aa1!' },
+              status: { type: 'string', enum: ['created', 'failed'], example: 'created' }
+            }
+          }
+        },
+        errors: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              row: { type: 'number', example: 4 },
+              email: { type: 'string', example: 'invalid-email' },
+              error: { type: 'string', example: 'Invalid or missing email' }
+            }
+          }
+        }
+      },
       example: {
         tenantId: '456e7890-e89b-12d3-a456-426614174000',
         total: 3,
