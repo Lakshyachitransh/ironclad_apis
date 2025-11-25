@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Get, Body, UseGuards, HttpCode, HttpStatus, Param, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -179,5 +179,117 @@ Only org_admin role can access this endpoint.`
   @ApiResponse({ status: 403, description: 'Insufficient permissions' })
   async getCurrentConfig() {
     return this.adminService.getCurrentDatabaseConfig();
+  }
+
+  @Get('users/all-with-courses')
+  @ApiOperation({
+    summary: 'Get all users across all tenants with course assignments',
+    description: `Retrieves all users from all tenants along with their course assignment details.
+    
+Includes:
+- User information (email, display name, status)
+- Course assignments per user
+- Course progress (percentage, status, lessons completed)
+- Tenant information
+- Assignment dates and status
+
+Only org_admin role can access this endpoint.`
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'All users with course assignments',
+    schema: {
+      example: {
+        success: true,
+        totalUsers: 5,
+        data: [
+          {
+            userId: 'user-123',
+            email: 'john@example.com',
+            displayName: 'John Doe',
+            status: 'active',
+            totalCoursesAssigned: 3,
+            coursesCompleted: 1,
+            courseAssignments: [
+              {
+                courseAssignmentId: 'ca-123',
+                tenantName: 'Acme Corp',
+                tenantId: 'tenant-123',
+                courseTitle: 'JavaScript Basics',
+                courseId: 'course-123',
+                assignmentStatus: 'assigned',
+                dueDate: '2025-12-31T00:00:00Z',
+                assignedAt: '2025-11-24T10:00:00Z',
+                progress: {
+                  progressPercentage: 75,
+                  status: 'in_progress',
+                  lessonsCompleted: 3,
+                  lessonsTotal: 4,
+                  startedAt: '2025-11-24T10:30:00Z',
+                  completedAt: null
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  async getAllUsersWithCourses() {
+    return this.adminService.getAllUsersWithCourseAssignments();
+  }
+
+  @Get('users/tenant/:tenantId/with-courses')
+  @ApiOperation({
+    summary: 'Get users for a specific tenant with course assignments',
+    description: `Retrieves all users from a specific tenant along with their course assignment details.
+    
+Only org_admin role can access this endpoint.`
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Tenant users with course assignments',
+    schema: {
+      example: {
+        success: true,
+        totalUsers: 3,
+        data: [
+          {
+            userId: 'user-123',
+            email: 'john@example.com',
+            displayName: 'John Doe',
+            status: 'active',
+            totalCoursesAssigned: 2,
+            coursesCompleted: 1,
+            courseAssignments: [
+              {
+                courseAssignmentId: 'ca-123',
+                tenantName: 'Acme Corp',
+                tenantId: 'tenant-123',
+                courseTitle: 'JavaScript Basics',
+                courseId: 'course-123',
+                assignmentStatus: 'assigned',
+                dueDate: '2025-12-31T00:00:00Z',
+                assignedAt: '2025-11-24T10:00:00Z',
+                progress: {
+                  progressPercentage: 75,
+                  status: 'in_progress',
+                  lessonsCompleted: 3,
+                  lessonsTotal: 4,
+                  startedAt: '2025-11-24T10:30:00Z',
+                  completedAt: null
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  @ApiResponse({ status: 400, description: 'Tenant not found' })
+  async getTenantUsersWithCourses(@Param('tenantId') tenantId: string) {
+    return this.adminService.getTenantUsersWithCourseAssignments(tenantId);
   }
 }
