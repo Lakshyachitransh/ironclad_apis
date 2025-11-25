@@ -2,14 +2,12 @@ import { Controller, Post, Get, Body, UseGuards, HttpCode, HttpStatus, Param, Qu
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import { RolesGuard } from '../common/guards/roles.guard';
-import { Roles } from '../common/decorators/roles.decorator';
+import { OrgAdminGuard } from '../common/guards/org-admin.guard';
 
 @ApiTags('admin')
 @ApiBearerAuth('access-token')
 @Controller('admin')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('org_admin')
+@UseGuards(JwtAuthGuard, OrgAdminGuard)
 export class AdminController {
   constructor(private adminService: AdminService) {}
 
