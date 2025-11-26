@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { MulterModule } from '@nestjs/platform-express';
 import { CoursesService } from './courses.service';
 import { CoursesController } from './courses.controller';
+import { QuizzesService } from './quizzes.service';
+import { QuizzesController } from './quizzes.controller';
 import { PrismaService } from '../prisma/prisma.service';
 import { S3Service } from '../common/services/s3.service';
 
@@ -14,7 +16,7 @@ import { S3Service } from '../common/services/s3.service';
       },
     }),
   ],
-  providers: [CoursesService, PrismaService, S3Service],
-  controllers: [CoursesController]
+  providers: [CoursesService, QuizzesService, PrismaService, S3Service],
+  controllers: [CoursesController, QuizzesController]
 })
 export class CoursesModule {}

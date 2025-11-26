@@ -143,8 +143,92 @@ model Lesson {
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
   lessonProgresses LessonProgress[]
+  quizzes          Quiz[]
 
   @@index([moduleId])
+}
+
+model Quiz {
+  id               String           @id @default(uuid())
+  lesson           Lesson           @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  lessonId         String
+  title            String
+  description      String?
+  instructions     String? // quiz instructions for learners
+  passingScore     Int              @default(70) // percentage needed to pass
+  attemptsAllowed  Int              @default(1) // number of attempts (-1 for unlimited)
+  timeLimit        Int? // time limit in seconds (null = no limit)
+  displayOrder     Int              @default(0)
+  shuffleQuestions Boolean          @default(false) // randomize question order
+  status           String           @default("draft") // draft, published, archived
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  questions        QuizQuestion[]
+  attempts         QuizAttempt[]
+
+  @@index([lessonId])
+}
+
+model QuizQuestion {
+  id           String   @id @default(uuid())
+  quiz         Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  quizId       String
+  type         String   @default("multiple_choice") // multiple_choice, true_false, short_answer
+  questionText String
+  explanation  String? // explanation shown after answering
+  points       Int      @default(1) // points for this question
+  displayOrder Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  options      QuizOption[]
+  answers      QuizAnswer[]
+
+  @@index([quizId])
+}
+
+model QuizOption {
+  id         String       @id @default(uuid())
+  question   QuizQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  questionId String
+  optionText String
+  isCorrect  Boolean      @default(false)
+  displayOrder Int        @default(0)
+  createdAt  DateTime     @default(now())
+
+  @@index([questionId])
+}
+
+model QuizAttempt {
+  id          String         @id @default(uuid())
+  quiz        Quiz           @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  quizId      String
+  userId      String // user who attempted
+  score       Int? // null until quiz is submitted
+  percentage  Float? // percentage score
+  status      String         @default("in_progress") // in_progress, submitted, graded
+  startedAt   DateTime       @default(now())
+  completedAt DateTime?
+  createdAt   DateTime       @default(now())
+  answers     QuizAnswer[]
+
+  @@index([quizId])
+  @@index([userId])
+  @@unique([quizId, userId, createdAt])
+}
+
+model QuizAnswer {
+  id            String       @id @default(uuid())
+  attempt       QuizAttempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  attemptId     String
+  question      QuizQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  questionId    String
+  selectedOption String? // selected option ID or short answer text
+  isCorrect     Boolean?
+  pointsEarned  Int?
+  createdAt     DateTime     @default(now())
+
+  @@index([attemptId])
+  @@index([questionId])
 }
 
 model LiveClass {
