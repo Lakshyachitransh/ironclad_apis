@@ -663,7 +663,7 @@ Statistics include:
   // ============================================================================
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('training_manager', 'instructor')
+  @Roles('training_manager', 'instructor', 'org_admin')
   @Post('lessons/:lessonId/generate-quizzes')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ 
@@ -758,7 +758,8 @@ Generated quizzes are immediately available for student attempts.`
     return this.svc.generateQuizzesFromVideo(lessonId, dto.videoContent, dto.courseId, req.user.tenantId);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('training_manager', 'instructor', 'org_admin', 'learner', 'viewer')
   @Get('lessons/:lessonId/quizzes')
   @ApiOperation({ 
     summary: 'List all quizzes for a lesson',
@@ -786,7 +787,8 @@ Generated quizzes are immediately available for student attempts.`
     return this.svc.getQuizzesForLesson(lessonId, req.user.tenantId);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('training_manager', 'instructor', 'org_admin', 'learner', 'viewer')
   @Get('quizzes/:quizId')
   @ApiOperation({ 
     summary: 'Get quiz details with questions and options',
