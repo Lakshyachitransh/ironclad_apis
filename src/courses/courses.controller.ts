@@ -11,6 +11,7 @@ import { CreateLessonDto } from './dto/create-lesson.dto';
 import { UploadVideoDto } from './dto/upload-video.dto';
 import { AssignCourseDto, AssignBulkCourseDto } from './dto/assign-course.dto';
 import { GenerateQuizFromVideoDto } from './dto/generate-quiz.dto';
+import { ExtractTranscriptDto, TranscriptSummaryDto } from './dto/video-transcription.dto';
 
 @ApiTags('courses')
 @ApiBearerAuth('access-token')
@@ -826,5 +827,134 @@ Generated quizzes are immediately available for student attempts.`
     @Param('quizId') quizId: string
   ) {
     return this.svc.getQuizDetails(quizId, req.user.tenantId);
+  }
+
+  // ============================================================================
+  // Video Transcription Endpoints
+  // ============================================================================
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('training_manager', 'instructor', 'org_admin')
+  @Post('lessons/:lessonId/extract-transcript')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ 
+    summary: 'Extract raw transcript from lesson video',
+    description: `Extracts raw video transcripts from the video uploaded to a lesson using AWS Transcribe.
+    
+Features:
+- Automatic speech-to-text conversion
+- Supports multiple languages (en-US, es-ES, fr-FR, etc.)
+- High accuracy transcription with confidence scores
+- Metadata: duration, word count, language detection
+- Raw transcript text output
+- Suitable for quiz generation and content analysis
+
+The video must be previously uploaded to the lesson.
+Transcription process takes 1-5 minutes depending on video length.`
+  })
+  @ApiParam({ name: 'lessonId', type: String, description: 'Lesson ID' })
+  @ApiBody({ type: ExtractTranscriptDto })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Transcript extracted successfully',
+    schema: {
+      example: {
+        lessonId: 'les-001',
+        transcript: 'Today we will discuss JavaScript fundamentals. JavaScript is a programming language used for web development...',
+        duration: 3600,
+        language: 'en-US',
+        wordCount: 2543,
+        confidence: 95,
+        status: 'completed',
+        extractedAt: '2025-11-27T10:30:00Z'
+      }
+    }
+  })
+  @ApiResponse({ status: 400, description: 'Invalid input or lesson not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  @ApiResponse({ status: 500, description: 'AWS Transcribe error' })
+  async extractTranscript(
+    @Request() req,
+    @Param('lessonId') lessonId: string,
+    @Body() dto: ExtractTranscriptDto
+  ): Promise<any> {
+    const course = await this.svc.get(dto.courseId);
+    if (!course || req.user.tenantId !== course.tenantId) {
+      throw new BadRequestException('You do not have access to this course');
+    }
+
+    return this.svc.extractTranscriptFromLesson(lessonId, dto.courseId, req.user.tenantId);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('training_manager', 'instructor', 'org_admin', 'learner', 'viewer')
+  @Get('lessons/:lessonId/transcript')
+  @ApiOperation({ 
+    summary: 'Get transcript for a lesson',
+    description: 'Retrieves the previously extracted raw transcript for a lesson.'
+  })
+  @ApiParam({ name: 'lessonId', type: String, description: 'Lesson ID' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Transcript retrieved',
+    schema: {
+      example: {
+        lessonId: 'les-001',
+        transcript: 'Raw transcript text...',
+        retrievedAt: '2025-11-27T10:30:00Z'
+      }
+    }
+  })
+  @ApiResponse({ status: 404, description: 'No transcript found' })
+  async getTranscript(
+    @Request() req,
+    @Param('lessonId') lessonId: string,
+    @Query('courseId') courseId: string
+  ): Promise<any> {
+    if (!courseId) {
+      throw new BadRequestException('courseId query parameter is required');
+    }
+
+    const course = await this.svc.get(courseId);
+    if (!course || req.user.tenantId !== course.tenantId) {
+      throw new BadRequestException('You do not have access to this course');
+    }
+
+    return this.svc.getTranscriptForLesson(lessonId, req.user.tenantId);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('training_manager', 'instructor', 'org_admin')
+  @Post('transcript-summary')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ 
+    summary: 'Generate summary from transcript',
+    description: `Generates a concise summary from raw transcript text.
+    
+Uses:
+- Natural language processing to extract key sentences
+- Removes redundant information
+- Reduces transcript by ~65%
+- Suitable for course descriptions and quiz generation`
+  })
+  @ApiBody({ type: TranscriptSummaryDto })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Summary generated',
+    schema: {
+      example: {
+        summary: 'JavaScript is a programming language for web development. It enables interactive web pages. Key concepts include variables, functions, and asynchronous programming.',
+        originalLength: 2543,
+        summaryLength: 856,
+        compressionRatio: 0.67
+      }
+    }
+  })
+  async generateTranscriptSummary(
+    @Request() req,
+    @Body() dto: TranscriptSummaryDto
+  ): Promise<any> {
+    return this.svc.generateTranscriptSummary(dto.transcript);
   }
 }

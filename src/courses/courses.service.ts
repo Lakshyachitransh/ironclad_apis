@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service';
 import { S3Service } from '../common/services/s3.service';
 import { QuizGeneratorService } from './services/quiz-generator.service';
+import { VideoTranscriptionService } from './services/video-transcription.service';
 import * as path from 'path';
 
 @Injectable()
@@ -9,7 +10,8 @@ export class CoursesService {
   constructor(
     private prisma: PrismaService,
     private s3Service: S3Service,
-    private quizGeneratorService: QuizGeneratorService
+    private quizGeneratorService: QuizGeneratorService,
+    private videoTranscriptionService: VideoTranscriptionService
   ) {}
 
   private async verifyTenantAccess(tenantId: string, entityId: string, entityType: 'course' | 'module' | 'lesson') {
@@ -770,6 +772,78 @@ export class CoursesService {
           // Don't expose isCorrect here - only server-side
         }))
       }))
+    };
+  }
+
+  /**
+   * Extract transcript from lesson video
+   */
+  async extractTranscriptFromLesson(lessonId: string, courseId: string, tenantId: string): Promise<any> {
+    // Verify lesson exists and belongs to tenant
+    const lesson = await this.prisma.lesson.findUnique({
+      where: { id: lessonId },
+      include: { module: { include: { course: true } } }
+    });
+
+    if (!lesson || lesson.module.course.tenantId !== tenantId) {
+      throw new NotFoundException('Lesson not found or access denied');
+    }
+
+    // Verify video exists
+    if (!lesson.videoUrl) {
+      throw new BadRequestException('No video found for this lesson');
+    }
+
+    // Extract transcript from video using transcription service
+    const transcriptResult = await this.videoTranscriptionService.extractTranscriptFromVideo(
+      lesson.videoUrl,
+      lesson.videoFileName || 'video.mp4',
+      lessonId
+    );
+
+    // Save transcript to database
+    await this.videoTranscriptionService.saveTranscriptToDatabase(
+      lessonId,
+      transcriptResult.transcript,
+      {
+        duration: transcriptResult.duration,
+        language: transcriptResult.language,
+        wordCount: transcriptResult.wordCount,
+        confidence: transcriptResult.confidence,
+      }
+    );
+
+    return transcriptResult;
+  }
+
+  /**
+   * Get saved transcript for lesson
+   */
+  async getTranscriptForLesson(lessonId: string, tenantId: string): Promise<any> {
+    // Verify lesson exists and belongs to tenant
+    const lesson = await this.prisma.lesson.findUnique({
+      where: { id: lessonId },
+      include: { module: { include: { course: true } } }
+    });
+
+    if (!lesson || lesson.module.course.tenantId !== tenantId) {
+      throw new NotFoundException('Lesson not found or access denied');
+    }
+
+    return this.videoTranscriptionService.getTranscriptForLesson(lessonId);
+  }
+
+  /**
+   * Generate transcript summary
+   */
+  async generateTranscriptSummary(transcript: string): Promise<any> {
+    const summary = await this.videoTranscriptionService.generateTranscriptSummary(transcript);
+    
+    return {
+      summary,
+      originalLength: transcript.length,
+      summaryLength: summary.length,
+      compressionRatio: Math.round((summary.length / transcript.length) * 100) / 100
     };
   }
 }
