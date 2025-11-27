@@ -1,11 +1,16 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { S3Service } from '../common/services/s3.service';
+import { QuizGeneratorService } from './services/quiz-generator.service';
 import * as path from 'path';
 
 @Injectable()
 export class CoursesService {
-  constructor(private prisma: PrismaService, private s3Service: S3Service) {}
+  constructor(
+    private prisma: PrismaService,
+    private s3Service: S3Service,
+    private quizGeneratorService: QuizGeneratorService
+  ) {}
 
   private async verifyTenantAccess(tenantId: string, entityId: string, entityType: 'course' | 'module' | 'lesson') {
     if (entityType === 'course') {
@@ -675,6 +680,96 @@ export class CoursesService {
         return acc;
       }, {}),
       overdueAssignments
+    };
+  }
+
+  /**
+   * Generate quizzes from video content using AI
+   */
+  async generateQuizzesFromVideo(lessonId: string, videoContent: string, courseId: string, tenantId: string): Promise<any> {
+    // Verify lesson exists and belongs to tenant
+    const lesson = await this.prisma.lesson.findUnique({
+      where: { id: lessonId },
+      include: { module: { include: { course: true } } }
+    });
+
+    if (!lesson || lesson.module.course.tenantId !== tenantId) {
+      throw new NotFoundException('Lesson not found or access denied');
+    }
+
+    // Generate quizzes using AI
+    const generatedQuizzes = await this.quizGeneratorService.generateQuizzesFromVideoContent(videoContent, lessonId, courseId);
+
+    return generatedQuizzes;
+  }
+
+  /**
+   * Get all quizzes for a lesson
+   */
+  async getQuizzesForLesson(lessonId: string, tenantId: string): Promise<any> {
+    // Verify lesson exists
+    const lesson = await this.prisma.lesson.findUnique({
+      where: { id: lessonId },
+      include: { module: { include: { course: true } } }
+    });
+
+    if (!lesson || lesson.module.course.tenantId !== tenantId) {
+      throw new NotFoundException('Lesson not found or access denied');
+    }
+
+    // Get all quizzes for this lesson
+    return this.prisma.quiz.findMany({
+      where: { lessonId },
+      include: {
+        questions: {
+          include: { options: true },
+          orderBy: { displayOrder: 'asc' }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+  }
+
+  /**
+   * Get quiz details with questions and options
+   */
+  async getQuizDetails(quizId: string, tenantId: string): Promise<any> {
+    const quiz = await this.prisma.quiz.findUnique({
+      where: { id: quizId },
+      include: {
+        lesson: {
+          include: { module: { include: { course: true } } }
+        },
+        questions: {
+          include: { options: true },
+          orderBy: { displayOrder: 'asc' }
+        }
+      }
+    });
+
+    if (!quiz || quiz.lesson.module.course.tenantId !== tenantId) {
+      throw new NotFoundException('Quiz not found or access denied');
+    }
+
+    // Remove sensitive fields before returning
+    return {
+      id: quiz.id,
+      title: quiz.title,
+      description: quiz.description,
+      passingScore: quiz.passingScore,
+      questionCount: quiz.questions.length,
+      questions: quiz.questions.map(q => ({
+        id: q.id,
+        questionText: q.questionText,
+        explanation: q.explanation,
+        order: q.displayOrder,
+        options: q.options.map(o => ({
+          id: o.id,
+          optionText: o.optionText,
+          order: o.displayOrder
+          // Don't expose isCorrect here - only server-side
+        }))
+      }))
     };
   }
 }

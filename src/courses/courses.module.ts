@@ -4,6 +4,7 @@ import { CoursesService } from './courses.service';
 import { CoursesController } from './courses.controller';
 import { QuizzesService } from './quizzes.service';
 import { QuizzesController } from './quizzes.controller';
+import { QuizGeneratorService } from './services/quiz-generator.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { S3Service } from '../common/services/s3.service';
 
@@ -16,7 +17,7 @@ import { S3Service } from '../common/services/s3.service';
       },
     }),
   ],
-  providers: [CoursesService, QuizzesService, PrismaService, S3Service],
+  providers: [CoursesService, QuizzesService, QuizGeneratorService, PrismaService, S3Service],
   controllers: [CoursesController, QuizzesController]
 })
 export class CoursesModule {}

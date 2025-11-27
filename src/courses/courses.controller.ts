@@ -10,6 +10,7 @@ import { CreateModuleDto } from './dto/create-module.dto';
 import { CreateLessonDto } from './dto/create-lesson.dto';
 import { UploadVideoDto } from './dto/upload-video.dto';
 import { AssignCourseDto, AssignBulkCourseDto } from './dto/assign-course.dto';
+import { GenerateQuizFromVideoDto } from './dto/generate-quiz.dto';
 
 @ApiTags('courses')
 @ApiBearerAuth('access-token')
@@ -655,5 +656,173 @@ Statistics include:
   })
   async getTenantStats(@Request() req) {
     return this.svc.getCourseTenantStats(req.user.tenantId);
+  }
+
+  // ============================================================================
+  // Quiz Generation Endpoints (AI-Powered)
+  // ============================================================================
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('training_manager', 'instructor')
+  @Post('lessons/:lessonId/generate-quizzes')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ 
+    summary: 'Generate quizzes from video content using AI',
+    description: `Generates 6 multiple-choice quizzes from video content using OpenAI's GPT-4 model.
+    
+Features:
+- Automatically generates exactly 6 quizzes
+- Each quiz has 4 multiple-choice options
+- Includes difficulty levels (easy, medium, hard)
+- Provides explanations for correct answers
+- Saves generated quizzes to database
+- Returns structured quiz data with questions and options
+
+The video content can be:
+1. Raw transcript/subtitles
+2. Lesson summary
+3. Video description
+
+Generated quizzes are immediately available for student attempts.`
+  })
+  @ApiParam({ name: 'lessonId', type: String, description: 'Lesson ID to generate quizzes for' })
+  @ApiBody({ type: GenerateQuizFromVideoDto })
+  @ApiResponse({ 
+    status: 201, 
+    description: 'Quizzes generated successfully',
+    schema: {
+      example: {
+        quizzes: [
+          {
+            id: 'quiz-id-1',
+            title: 'Quiz 1: Fundamentals',
+            description: 'Assessment of fundamental concepts',
+            passingScore: 70,
+            questionCount: 1,
+            questions: [
+              {
+                id: 'question-1',
+                questionText: 'What is the primary purpose of...?',
+                explanation: 'The correct answer is B because...',
+                order: 1,
+                options: [
+                  {
+                    id: 'option-1',
+                    optionText: 'Option A',
+                    order: 0
+                  },
+                  {
+                    id: 'option-2',
+                    optionText: 'Option B (Correct)',
+                    order: 1
+                  },
+                  {
+                    id: 'option-3',
+                    optionText: 'Option C',
+                    order: 2
+                  },
+                  {
+                    id: 'option-4',
+                    optionText: 'Option D',
+                    order: 3
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        generatedAt: '2025-11-27T10:30:00Z',
+        lessonId: 'les-001',
+        videoContentSummary: 'First 200 characters of processed content...'
+      }
+    }
+  })
+  @ApiResponse({ status: 400, description: 'Missing video content or invalid input' })
+  @ApiResponse({ status: 401, description: 'Unauthorized - insufficient permissions' })
+  @ApiResponse({ status: 404, description: 'Lesson not found' })
+  @ApiResponse({ status: 500, description: 'OpenAI API error or database error' })
+  async generateQuizzesFromVideo(
+    @Request() req,
+    @Param('lessonId') lessonId: string,
+    @Body() dto: GenerateQuizFromVideoDto
+  ): Promise<any> {
+    if (!dto.videoContent || dto.videoContent.trim().length === 0) {
+      throw new BadRequestException('videoContent is required and cannot be empty');
+    }
+
+    const course = await this.svc.get(dto.courseId);
+    if (!course || req.user.tenantId !== course.tenantId) {
+      throw new BadRequestException('You do not have access to this course');
+    }
+
+    return this.svc.generateQuizzesFromVideo(lessonId, dto.videoContent, dto.courseId, req.user.tenantId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('lessons/:lessonId/quizzes')
+  @ApiOperation({ 
+    summary: 'List all quizzes for a lesson',
+    description: 'Retrieves all quizzes associated with a specific lesson.'
+  })
+  @ApiParam({ name: 'lessonId', type: String, description: 'Lesson ID' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'List of quizzes for the lesson',
+    schema: {
+      example: [
+        {
+          id: 'quiz-id-1',
+          title: 'Quiz 1',
+          passingScore: 70,
+          questionCount: 1
+        }
+      ]
+    }
+  })
+  async getQuizzesForLesson(
+    @Request() req,
+    @Param('lessonId') lessonId: string
+  ) {
+    return this.svc.getQuizzesForLesson(lessonId, req.user.tenantId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('quizzes/:quizId')
+  @ApiOperation({ 
+    summary: 'Get quiz details with questions and options',
+    description: 'Retrieves full quiz structure including all questions and answer options.'
+  })
+  @ApiParam({ name: 'quizId', type: String, description: 'Quiz ID' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Quiz details',
+    schema: {
+      example: {
+        id: 'quiz-id-1',
+        title: 'Quiz 1: Fundamentals',
+        description: 'Assessment quiz for the lesson',
+        passingScore: 70,
+        questions: [
+          {
+            id: 'question-1',
+            questionText: 'What is the primary purpose...?',
+            explanation: 'Explanation for the correct answer',
+            options: [
+              {
+                id: 'option-1',
+                optionText: 'Option A',
+                order: 0
+              }
+            ]
+          }
+        ]
+      }
+    }
+  })
+  async getQuizDetails(
+    @Request() req,
+    @Param('quizId') quizId: string
+  ) {
+    return this.svc.getQuizDetails(quizId, req.user.tenantId);
   }
 }
