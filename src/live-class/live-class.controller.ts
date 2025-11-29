@@ -21,17 +21,23 @@ import {
   ApiQuery
 } from '@nestjs/swagger';
 import { LiveClassService } from './live-class.service';
+import { AttendanceService } from './services/attendance.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CreateLiveClassDto } from './dto/create-live-class.dto';
+import { TrackActivityDto, RecordLeaveDto, CalculateAttendanceDto } from './dto/attendance.dto';
 import type { Request as ExpressRequest } from 'express';
+import { JwtUser } from '../auth/types/jwt-user.interface';
 
 @ApiTags('live-classes')
 @ApiBearerAuth('access-token')
 @Controller('live-classes')
 export class LiveClassController {
-  constructor(private readonly liveClassService: LiveClassService) {}
+  constructor(
+    private readonly liveClassService: LiveClassService,
+    private readonly attendanceService: AttendanceService,
+  ) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('training_manager', 'org_admin')
@@ -419,5 +425,322 @@ Constraints:
     }
 
     return this.liveClassService.setRecordingUrl(liveClassId, body.recordingUrl, actor.tenantId);
+  }
+
+  // ============================================================================
+  // Attendance & Training Completion Endpoints
+  // ============================================================================
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':liveClassId/attendance/track-activity')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Track user activity in live class',
+    description: `Records that a user is actively participating in the live class.
+    
+Used for:
+- Tracking when user has mouse/keyboard activity
+- Recording active time for attendance calculation
+- Called periodically while user is engaged
+- Not required for passive viewing (optional feature)`,
+  })
+  @ApiParam({ name: 'liveClassId', type: String, description: 'Live class ID' })
+  @ApiBody({
+    schema: {
+      example: {
+        userId: 'user-123',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Activity tracked successfully',
+    schema: {
+      example: {
+        message: 'Activity recorded',
+      },
+    },
+  })
+  async trackActivity(
+    @Param('liveClassId') liveClassId: string,
+    @Body('userId') userId: string,
+    @Request() req: ExpressRequest,
+  ) {
+    // @ts-ignore
+    const actor = req.user as JwtUser;
+    if (!actor?.tenantId) {
+      throw new BadRequestException('No tenant information in token');
+    }
+
+    await this.attendanceService.trackActivity(liveClassId, userId, actor.tenantId);
+    return { message: 'Activity tracked' };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':liveClassId/attendance/record-leave')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Record when participant leaves live class',
+    description: `Records participant leaving and calculates attendance.
+    
+Calculates:
+- Total active duration in seconds
+- Active percentage (0-100%)
+- Whether 80% attendance threshold is met
+- Marks training as completed if threshold met`,
+  })
+  @ApiParam({ name: 'liveClassId', type: String, description: 'Live class ID' })
+  @ApiBody({
+    schema: {
+      example: {
+        userId: 'user-123',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Attendance calculated and recorded',
+    schema: {
+      example: {
+        activeDurationSeconds: 2700,
+        activeDurationMinutes: 45,
+        activePercentage: 85,
+        isCompleted: true,
+        status: 'COMPLETED',
+        message: 'Training completed with 85% attendance',
+      },
+    },
+  })
+  async recordLeave(
+    @Param('liveClassId') liveClassId: string,
+    @Body('userId') userId: string,
+    @Request() req: ExpressRequest,
+  ) {
+    // @ts-ignore
+    const actor = req.user as JwtUser;
+    if (!actor?.tenantId) {
+      throw new BadRequestException('No tenant information in token');
+    }
+
+    const result = await this.attendanceService.recordParticipantLeave(
+      liveClassId,
+      userId,
+      actor.tenantId,
+    );
+    return {
+      activeDurationSeconds: result.activeDurationSeconds,
+      activeDurationMinutes: Math.round(result.activeDurationSeconds / 60),
+      activePercentage: result.activePercentage,
+      isCompleted: result.isCompleted,
+      status: result.isCompleted ? 'COMPLETED' : 'INCOMPLETE',
+      message: result.isCompleted
+        ? `Training completed with ${result.activePercentage}% attendance`
+        : `Attendance: ${result.activePercentage}%. Need ${Math.max(0, 80 - result.activePercentage)}% more for completion`,
+    };
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('training_manager', 'instructor', 'org_admin')
+  @Post(':liveClassId/attendance/calculate-all')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Calculate attendance for all participants',
+    description: `Calculates and updates attendance for all participants in a live class.
+    
+Typically called when:
+- Live class ends (automatic or manual)
+- Need to finalize attendance data
+- Generate reports`,
+  })
+  @ApiParam({ name: 'liveClassId', type: String, description: 'Live class ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Attendance calculated for all participants',
+    schema: {
+      example: {
+        message: 'Attendance calculated for all participants',
+        liveClassId: 'lc-123',
+        participantsProcessed: 25,
+      },
+    },
+  })
+  async calculateAllAttendance(
+    @Param('liveClassId') liveClassId: string,
+    @Request() req: ExpressRequest,
+  ) {
+    // @ts-ignore
+    const actor = req.user as JwtUser;
+    if (!actor?.tenantId) {
+      throw new BadRequestException('No tenant information in token');
+    }
+
+    await this.attendanceService.calculateClassAttendance(liveClassId, actor.tenantId);
+    return {
+      message: 'Attendance calculated for all participants',
+      liveClassId,
+    };
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('training_manager', 'instructor', 'org_admin')
+  @Get(':liveClassId/attendance/report')
+  @ApiOperation({
+    summary: 'Get attendance report for live class',
+    description: `Generates comprehensive attendance report including:
+    
+- Total class duration
+- Participant attendance breakdown
+- Completion status for each participant
+- Summary statistics (completion rate, average attendance)`,
+  })
+  @ApiParam({ name: 'liveClassId', type: String, description: 'Live class ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Attendance report',
+    schema: {
+      example: {
+        liveClassId: 'lc-123',
+        title: 'JavaScript Basics - Session 1',
+        totalClassDurationMinutes: 60,
+        summary: {
+          totalParticipants: 25,
+          completedParticipants: 22,
+          incompletedParticipants: 3,
+          completionRate: 88,
+          averageAttendance: 82,
+        },
+        participants: [
+          {
+            userId: 'user-1',
+            activeDurationMinutes: 58,
+            activePercentage: 97,
+            isCompleted: true,
+            status: 'COMPLETED',
+          },
+        ],
+      },
+    },
+  })
+  async getAttendanceReport(
+    @Param('liveClassId') liveClassId: string,
+    @Request() req: ExpressRequest,
+  ) {
+    // @ts-ignore
+    const actor = req.user as JwtUser;
+    if (!actor?.tenantId) {
+      throw new BadRequestException('No tenant information in token');
+    }
+
+    return this.attendanceService.getAttendanceReport(liveClassId, actor.tenantId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get(':liveClassId/attendance/:userId')
+  @ApiOperation({
+    summary: 'Get attendance details for a participant',
+    description: `Retrieves detailed attendance information for a specific participant:
+    
+- Join/leave times
+- Active duration in minutes
+- Active percentage
+- Completion status
+- Training status message`,
+  })
+  @ApiParam({ name: 'liveClassId', type: String, description: 'Live class ID' })
+  @ApiParam({ name: 'userId', type: String, description: 'User ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Participant attendance details',
+    schema: {
+      example: {
+        liveClassId: 'lc-123',
+        liveClassTitle: 'JavaScript Basics',
+        userId: 'user-1',
+        joinedAt: '2025-11-27T10:00:00Z',
+        leftAt: '2025-11-27T11:00:00Z',
+        activeDurationMinutes: 58,
+        totalClassDurationMinutes: 60,
+        activePercentage: 97,
+        isCompleted: true,
+        completedAt: '2025-11-27T11:00:00Z',
+        status: 'COMPLETED',
+        message: 'Training completed with 97% attendance',
+      },
+    },
+  })
+  async getParticipantAttendance(
+    @Param('liveClassId') liveClassId: string,
+    @Param('userId') userId: string,
+    @Request() req: ExpressRequest,
+  ) {
+    // @ts-ignore
+    const actor = req.user as JwtUser;
+    if (!actor?.tenantId) {
+      throw new BadRequestException('No tenant information in token');
+    }
+
+    return this.attendanceService.getParticipantAttendance(
+      liveClassId,
+      userId,
+      actor.tenantId,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('attendance/training-progress')
+  @ApiOperation({
+    summary: 'Get training progress for user',
+    description: `Retrieves user's training progress across all live classes:
+    
+- Number of sessions attended
+- Sessions completed (80%+ attendance)
+- Average attendance across all sessions
+- Individual session details`,
+  })
+  @ApiQuery({ name: 'userId', type: String, description: 'User ID' })
+  @ApiQuery({ name: 'courseId', type: String, description: 'Course ID (optional)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Training progress',
+    schema: {
+      example: {
+        userId: 'user-1',
+        courseId: 'course-1',
+        summary: {
+          totalSessions: 5,
+          completedSessions: 4,
+          incompletedSessions: 1,
+          completionRate: 80,
+          averageAttendance: 85,
+        },
+        sessions: [
+          {
+            liveClassId: 'lc-1',
+            title: 'Session 1',
+            activeDurationMinutes: 55,
+            activePercentage: 92,
+            isCompleted: true,
+            status: 'COMPLETED',
+          },
+        ],
+      },
+    },
+  })
+  async getTrainingProgress(
+    @Query('userId') userId: string,
+    @Query('courseId') courseId: string,
+    @Request() req: ExpressRequest,
+  ) {
+    // @ts-ignore
+    const actor = req.user as JwtUser;
+    if (!actor?.tenantId) {
+      throw new BadRequestException('No tenant information in token');
+    }
+
+    return this.attendanceService.getTrainingProgress(
+      userId,
+      courseId,
+      actor.tenantId,
+    );
   }
 }

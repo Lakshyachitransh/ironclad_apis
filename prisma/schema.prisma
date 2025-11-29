@@ -256,14 +256,18 @@ model LiveClass {
 }
 
 model LiveClassParticipant {
-  id          String    @id @default(uuid())
-  liveClass   LiveClass @relation(fields: [liveClassId], references: [id], onDelete: Cascade)
-  liveClassId String
-  userId      String // participant user ID
-  joinedAt    DateTime  @default(now())
-  leftAt      DateTime?
-  role        String    @default("participant") // teacher, participant
-  createdAt   DateTime  @default(now())
+  id                    String    @id @default(uuid())
+  liveClass             LiveClass @relation(fields: [liveClassId], references: [id], onDelete: Cascade)
+  liveClassId           String
+  userId                String // participant user ID
+  joinedAt              DateTime  @default(now())
+  leftAt                DateTime?
+  role                  String    @default("participant") // teacher, participant
+  activeDurationSeconds Int       @default(0) // total active duration in seconds
+  activePercentage      Float     @default(0) // percentage of class duration user was active (0-100)
+  isCompleted           Boolean   @default(false) // true if activePercentage >= 80
+  completedAt           DateTime? // when attendance was marked as complete
+  createdAt             DateTime  @default(now())
 
   @@unique([liveClassId, userId])
   @@index([liveClassId])
