@@ -26,7 +26,7 @@ export class CoursesController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('training_manager')
+  @Roles('training_manager', 'org_admin')
   @Post()
   @ApiOperation({ 
     summary: 'Create a new course',
@@ -128,7 +128,7 @@ export class CoursesController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('training_manager')
+  @Roles('training_manager', 'org_admin')
   @Patch(':id')
   @ApiOperation({ 
     summary: 'Update course details',
@@ -155,7 +155,7 @@ export class CoursesController {
 
   // Module endpoints
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('training_manager')
+  @Roles('training_manager', 'org_admin')
   @Post('modules/create')
   @ApiOperation({ 
     summary: 'Create a new module in a course',
@@ -230,7 +230,7 @@ export class CoursesController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('training_manager')
+  @Roles('training_manager', 'org_admin')
   @Patch('modules/:moduleId')
   @ApiOperation({ 
     summary: 'Update module details',
@@ -244,7 +244,7 @@ export class CoursesController {
 
   // Lesson endpoints
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('training_manager')
+  @Roles('training_manager', 'org_admin')
   @Post('lessons/create')
   @ApiOperation({ 
     summary: 'Create a new lesson in a module',
@@ -289,7 +289,7 @@ export class CoursesController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('training_manager')
+  @Roles('training_manager', 'org_admin')
   @Patch('lessons/:lessonId')
   @ApiOperation({ 
     summary: 'Update lesson details',
@@ -303,7 +303,7 @@ export class CoursesController {
 
   // Video upload endpoints
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('training_manager')
+  @Roles('training_manager', 'org_admin')
   @Post('lessons/:lessonId/upload-video')
   @UseInterceptors(FileInterceptor('video', {
     limits: { fileSize: 500 * 1024 * 1024 }, // 500MB limit
@@ -355,7 +355,7 @@ export class CoursesController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('training_manager')
+  @Roles('training_manager', 'org_admin')
   @Delete('lessons/:lessonId/video')
   @ApiOperation({ 
     summary: 'Delete video from a lesson',
