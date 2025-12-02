@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { S3Service } from '../common/services/s3.service';
+import { EmailService } from '../common/services/email.service';
 import { QuizGeneratorService } from './services/quiz-generator.service';
 import { VideoTranscriptionService } from './services/video-transcription.service';
 import * as path from 'path';
@@ -10,6 +11,7 @@ export class CoursesService {
   constructor(
     private prisma: PrismaService,
     private s3Service: S3Service,
+    private emailService: EmailService,
     private quizGeneratorService: QuizGeneratorService,
     private videoTranscriptionService: VideoTranscriptionService
   ) {}
@@ -264,7 +266,8 @@ export class CoursesService {
     courseId: string,
     assignToUserIds: string[],
     assignedBy: string,
-    dueDate?: Date
+    dueDate?: Date,
+    courseLink?: string
   ) {
     // Verify course exists and belongs to tenant
     const course = await this.prisma.course.findUnique({ 
@@ -282,6 +285,13 @@ export class CoursesService {
 
     // Get total lesson count
     const lessonsTotal = course.modules.reduce((sum, m) => sum + m.lessons.length, 0);
+
+    // Fetch user details for email sending
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: assignToUserIds } }
+    });
+
+    const userMap = new Map(users.map(u => [u.id, u]));
 
     // Assign course to each user
     const assignments = await Promise.all(
@@ -328,6 +338,21 @@ export class CoursesService {
             status: 'not_started'
           }
         });
+
+        // Send assignment email notification
+        const user = userMap.get(userId);
+        if (user?.email) {
+          this.emailService.sendCourseAssignmentEmail(
+            user.email,
+            user.displayName || user.email,
+            course.title,
+            dueDate,
+            courseLink
+          ).catch(error => {
+            // Log error but don't fail assignment if email fails
+            console.error(`Failed to send email to ${user.email}:`, error);
+          });
+        }
 
         return {
           userId,

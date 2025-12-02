@@ -431,7 +431,8 @@ Only training_manager and org_admin roles can assign courses.`
   async assignCourse(@Request() req, @Body() dto: AssignCourseDto) {
     this.validateTenantAccess(req.user.tenantId, dto.tenantId);
     const dueDate = dto.dueDate ? new Date(dto.dueDate) : undefined;
-    return this.svc.assignCourseToUsers(dto.tenantId, dto.courseId, dto.assignToUserIds, req.user.id, dueDate);
+    const courseLink = dto.courseLink;
+    return this.svc.assignCourseToUsers(dto.tenantId, dto.courseId, dto.assignToUserIds, req.user.id, dueDate, courseLink);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

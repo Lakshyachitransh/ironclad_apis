@@ -1,4 +1,4 @@
-import { IsString, IsUUID, IsOptional, IsDateString, IsArray } from 'class-validator';
+import { IsString, IsUUID, IsOptional, IsDateString, IsArray, IsUrl } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class AssignCourseDto {
@@ -33,6 +33,15 @@ export class AssignCourseDto {
   @IsOptional()
   @IsDateString()
   dueDate?: string;
+
+  @ApiProperty({ 
+    description: 'Link to the course (for email notification)',
+    example: 'https://yourapp.com/courses/123e4567-e89b-12d3-a456-426614174000',
+    required: false
+  })
+  @IsOptional()
+  @IsUrl()
+  courseLink?: string;
 }
 
 export class AssignBulkCourseDto {
@@ -69,4 +78,13 @@ export class AssignBulkCourseDto {
   @IsOptional()
   @IsDateString()
   dueDate?: string;
+
+  @ApiProperty({ 
+    description: 'Link to the course (for email notification)',
+    example: 'https://yourapp.com/courses/123e4567-e89b-12d3-a456-426614174000',
+    required: false
+  })
+  @IsOptional()
+  @IsUrl()
+  courseLink?: string;
 }
