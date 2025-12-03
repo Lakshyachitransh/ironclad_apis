@@ -200,13 +200,32 @@ export class CoursesService {
       // Convert videoDuration to integer if provided
       const duration = videoDuration ? parseInt(String(videoDuration), 10) : null;
 
-      // Update lesson with video information
+      // Extract transcript and generate summary (async, non-blocking)
+      let videoSummary = null;
+      try {
+        const transcriptResult = await this.videoTranscriptionService.extractTranscriptFromVideo(
+          file.path,
+          fileName,
+          lessonId,
+        );
+        
+        // Generate summary from transcript
+        videoSummary = await this.videoTranscriptionService.generateVideoSummary(
+          transcriptResult.transcript,
+        );
+      } catch (transcriptionError) {
+        // Log error but don't fail the upload - summary is optional
+        console.warn('Failed to generate video summary:', transcriptionError.message);
+      }
+
+      // Update lesson with video information and summary
       const updatedLesson = await this.prisma.lesson.update({
         where: { id: lessonId },
         data: {
           videoFileName: fileName,
           videoUrl: videoUrl,
           videoDuration: duration,
+          videoSummary: videoSummary,
         },
       });
 
@@ -215,6 +234,7 @@ export class CoursesService {
         lesson: updatedLesson,
         fileSize: file.size,
         s3Url: videoUrl,
+        summaryGenerated: !!videoSummary,
       };
     } catch (error) {
       throw new BadRequestException(`Failed to upload video: ${error.message}`);
@@ -726,6 +746,35 @@ export class CoursesService {
 
     // Generate quizzes using AI
     const generatedQuizzes = await this.quizGeneratorService.generateQuizzesFromVideoContent(videoContent, lessonId, courseId);
+
+    return generatedQuizzes;
+  }
+
+  /**
+   * Generate quizzes from stored video summary
+   * Uses the summary that was automatically created during video upload
+   */
+  async generateQuizzesFromStoredSummary(lessonId: string, courseId: string, tenantId: string): Promise<any> {
+    // Verify lesson exists and belongs to tenant
+    const lesson = await this.prisma.lesson.findUnique({
+      where: { id: lessonId },
+      include: { module: { include: { course: true } } }
+    });
+
+    if (!lesson || lesson.module.course.tenantId !== tenantId) {
+      throw new NotFoundException('Lesson not found or access denied');
+    }
+
+    if (!lesson.videoSummary) {
+      throw new BadRequestException('This lesson does not have a video summary. Please upload a video first using the /upload-video endpoint.');
+    }
+
+    // Generate quizzes using stored summary
+    const generatedQuizzes = await this.quizGeneratorService.generateQuizzesFromStoredSummary(
+      lesson.videoSummary,
+      lessonId,
+      courseId
+    );
 
     return generatedQuizzes;
   }

@@ -138,6 +138,7 @@ model Lesson {
   videoUrl         String?
   videoDuration    Int? // duration in seconds
   videoFileName    String?
+  videoSummary     String? // AI-generated summary of video content for quiz generation
   displayOrder     Int              @default(0)
   status           String           @default("draft")
   createdAt        DateTime         @default(now())

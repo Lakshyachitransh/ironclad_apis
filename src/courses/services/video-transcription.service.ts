@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { S3Service } from '../../common/services/s3.service';
+import { OpenAI } from 'openai';
 import * as AWS from 'aws-sdk';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -15,6 +16,7 @@ interface TranscriptionJob {
 @Injectable()
 export class VideoTranscriptionService {
   private transcribeClient: AWS.TranscribeService;
+  private openai: OpenAI;
 
   constructor(
     private prisma: PrismaService,
@@ -23,6 +25,56 @@ export class VideoTranscriptionService {
     this.transcribeClient = new AWS.TranscribeService({
       region: process.env.AWS_REGION || 'eu-north-1',
     });
+    this.openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+  }
+
+  /**
+   * Generate AI summary from video transcript
+   * Creates a concise educational summary for quiz generation
+   */
+  async generateVideoSummary(transcript: string): Promise<string> {
+    if (!transcript || transcript.trim().length === 0) {
+      throw new BadRequestException('Transcript cannot be empty');
+    }
+
+    try {
+      const response = await this.openai.chat.completions.create({
+        model: 'gpt-4-turbo-preview',
+        messages: [
+          {
+            role: 'system',
+            content: `You are an expert educational content summarizer. Create a concise, clear summary of the following video transcript.
+
+The summary should:
+- Be 2-3 paragraphs (150-300 words)
+- Capture the main learning objectives
+- Include key concepts and important details
+- Be suitable for generating multiple-choice quiz questions
+- Use clear, academic language
+- Focus on educational value
+
+Return ONLY the summary text, no additional formatting or explanations.`,
+          },
+          {
+            role: 'user',
+            content: `Please summarize this video transcript:\n\n${transcript.substring(0, 4000)}`, // Limit to first 4000 chars
+          },
+        ],
+        temperature: 0.7,
+        max_tokens: 500,
+      });
+
+      const summary = response.choices[0].message.content?.trim();
+      if (!summary) {
+        throw new InternalServerErrorException('Failed to generate summary from AI response');
+      }
+      return summary;
+    } catch (error) {
+      console.error('Error generating video summary:', error);
+      throw new InternalServerErrorException('Failed to generate video summary');
+    }
   }
 
   /**

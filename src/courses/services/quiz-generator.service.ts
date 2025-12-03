@@ -27,12 +27,43 @@ export class QuizGeneratorService {
     // Call OpenAI to generate 6 quizzes based on video content
     const prompt = this.createQuizPrompt(videoContent);
 
+    return this.createQuizzesWithPrompt(prompt, lessonId, courseId);
+  }
+
+  /**
+   * Generate quizzes from stored video summary
+   * More efficient than generating from raw transcript
+   * Uses AI-processed summary for better quiz quality
+   */
+  async generateQuizzesFromStoredSummary(
+    videoSummary: string,
+    lessonId: string,
+    courseId: string,
+  ) {
+    if (!videoSummary || videoSummary.trim().length === 0) {
+      throw new Error('Video summary is empty');
+    }
+
+    const prompt = `Based on the following video summary, generate 6 multiple-choice quiz questions that test understanding of the key concepts:\n\n${videoSummary}`;
+
+    return this.createQuizzesWithPrompt(prompt, lessonId, courseId);
+  }
+
+  /**
+   * Internal method to create quizzes from prompt
+   * Used by both raw content and summary methods
+   */
+  private async createQuizzesWithPrompt(
+    prompt: string,
+    lessonId: string,
+    courseId: string,
+  ) {
     const response = await this.openai.chat.completions.create({
       model: 'gpt-4-turbo-preview',
       messages: [
         {
           role: 'system',
-          content: `You are an expert educational content creator. Generate exactly 6 multiple-choice quizzes based on the provided video content. 
+          content: `You are an expert educational content creator. Generate exactly 6 multiple-choice quizzes based on the provided content. 
           
 Return ONLY valid JSON in this exact format:
 {
@@ -52,7 +83,7 @@ Requirements:
 - correctAnswer must be 0, 1, 2, or 3 (index of correct option)
 - Each option should be 1-100 characters
 - Explanations should be 2-200 characters
-- Questions should test understanding of key concepts from the video`,
+- Questions should test understanding of key concepts`,
         },
         {
           role: 'user',
@@ -92,7 +123,6 @@ Requirements:
       quizData.quizzes,
       lessonId,
       courseId,
-      videoContent,
     );
 
     return {
@@ -109,7 +139,6 @@ Requirements:
       })),
       generatedAt: new Date(),
       lessonId,
-      videoContentSummary: videoContent.substring(0, 200),
     };
   }
 
@@ -131,7 +160,6 @@ Generate quizzes that:
     quizzes: GeneratedQuiz[],
     lessonId: string,
     courseId: string,
-    videoContent: string,
   ) {
     // Create a quiz container for this lesson
     const quiz = await this.prisma.quiz.create({

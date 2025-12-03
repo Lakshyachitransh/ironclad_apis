@@ -761,6 +761,59 @@ Generated quizzes are immediately available for student attempts.`
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('training_manager', 'org_admin')
+  @Post('lessons/:lessonId/generate-quizzes-from-summary')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ 
+    summary: 'Generate quizzes from stored video summary',
+    description: `Generates 6 multiple-choice quizzes from the video summary that was automatically created during video upload.
+    
+This is more efficient than the raw video content method:
+- Uses AI-processed video summary
+- Faster generation
+- Better quiz quality
+- No need to provide raw transcript
+
+Note: Video summary is automatically generated when you upload a video using the /upload-video endpoint.`
+  })
+  @ApiParam({ name: 'lessonId', type: String, description: 'Lesson ID' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        courseId: {
+          type: 'string',
+          description: 'Course ID',
+          example: 'course-123'
+        }
+      },
+      required: ['courseId']
+    }
+  })
+  @ApiResponse({ 
+    status: 201, 
+    description: 'Quizzes generated from summary successfully'
+  })
+  @ApiResponse({ status: 400, description: 'Lesson has no video summary' })
+  @ApiResponse({ status: 404, description: 'Lesson not found' })
+  async generateQuizzesFromStoredSummary(
+    @Request() req,
+    @Param('lessonId') lessonId: string,
+    @Body('courseId') courseId: string
+  ): Promise<any> {
+    if (!courseId) {
+      throw new BadRequestException('courseId is required');
+    }
+
+    const course = await this.svc.get(courseId);
+    if (!course || req.user.tenantId !== course.tenantId) {
+      throw new BadRequestException('You do not have access to this course');
+    }
+
+    return this.svc.generateQuizzesFromStoredSummary(lessonId, courseId, req.user.tenantId);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('training_manager', 'instructor', 'org_admin', 'learner', 'viewer')
   @Get('lessons/:lessonId/quizzes')
   @ApiOperation({ 
