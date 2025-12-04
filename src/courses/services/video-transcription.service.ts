@@ -206,7 +206,7 @@ Return ONLY the summary text, no additional formatting or explanations.`,
       Settings: {
         VocabularyName: undefined, // Optional: custom vocabulary
         ShowAlternatives: false,
-        MaxSpeakerLabels: 1, // Single speaker
+        MaxSpeakerLabels: 2, // AWS requires minimum 2
         ShowSpeakerLabels: false,
       },
     };
