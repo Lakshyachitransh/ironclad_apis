@@ -100,9 +100,9 @@ Return ONLY the summary text, no additional formatting or explanations.`,
 
       // Check if it's already an S3 URL
       if (videoFilePath.startsWith('http')) {
-        // It's already an S3 URL, use it directly
-        videoUrl = videoFilePath;
-        console.log('Using S3 URL directly for transcription:', videoUrl);
+        // It's already an S3 URL, normalize to use current region
+        videoUrl = this.s3Service.normalizeS3Url(videoFilePath);
+        console.log('Using S3 URL for transcription:', videoUrl);
       } else {
         // It's a local file path, upload to S3
         if (!fs.existsSync(videoFilePath)) {
