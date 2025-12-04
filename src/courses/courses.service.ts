@@ -1004,4 +1004,54 @@ export class CoursesService {
   async checkTranscriptionStatus(jobName: string): Promise<any> {
     return this.videoTranscriptionService.checkTranscriptionStatus(jobName);
   }
+
+  /**
+   * Generate summary directly from video using OpenAI Vision
+   * Bypasses AWS Transcribe for faster summarization
+   * Perfect for quick content summaries
+   */
+  async generateSummaryFromVideoFile(
+    lessonId: string,
+    courseId: string,
+    tenantId: string
+  ): Promise<any> {
+    // Verify lesson exists and belongs to tenant
+    const lesson = await this.prisma.lesson.findUnique({
+      where: { id: lessonId },
+      include: { module: { include: { course: true } } }
+    });
+
+    if (!lesson || lesson.module.course.tenantId !== tenantId) {
+      throw new NotFoundException('Lesson not found or access denied');
+    }
+
+    // Verify video exists
+    if (!lesson.videoUrl) {
+      throw new BadRequestException('No video found for this lesson');
+    }
+
+    // Generate summary directly from video using OpenAI
+    const summaryResult = await this.videoTranscriptionService.generateSummaryFromVideoFile(
+      lesson.videoUrl,
+      lesson.videoFileName || 'video.mp4'
+    );
+
+    // Update lesson with generated summary
+    const updatedLesson = await this.prisma.lesson.update({
+      where: { id: lessonId },
+      data: {
+        videoSummary: summaryResult.summary,
+      },
+    });
+
+    return {
+      lessonId,
+      videoUrl: lesson.videoUrl,
+      summary: summaryResult.summary,
+      message: 'Video summary generated successfully using OpenAI',
+      generatedAt: summaryResult.generatedAt,
+      saved: true,
+      videoSummaryUpdated: true,
+    };
+  }
 }

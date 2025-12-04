@@ -78,6 +78,99 @@ Return ONLY the summary text, no additional formatting or explanations.`,
   }
 
   /**
+   * Generate summary directly from video file using OpenAI Vision
+   * Skips AWS Transcribe and sends video directly to OpenAI
+   * Much faster for getting summaries (1-2 minutes vs 5-30 minutes)
+   * Perfect when you just need a summary, not full transcript
+   */
+  async generateSummaryFromVideoFile(
+    videoUrl: string,
+    videoFileName: string,
+  ): Promise<{
+    summary: string;
+    generatedAt: Date;
+  }> {
+    try {
+      // Validate video URL
+      if (!videoUrl || (!videoUrl.startsWith('http') && !videoUrl.startsWith('s3://'))) {
+        throw new BadRequestException('Invalid video URL');
+      }
+
+      // Normalize S3 URL if needed
+      let processedUrl = videoUrl;
+      if (videoUrl.startsWith('s3://')) {
+        processedUrl = this.s3Service.normalizeS3Url(videoUrl);
+      }
+
+      console.log('Sending video to OpenAI for summarization:', processedUrl);
+
+      // Call OpenAI Vision API with video file
+      const response = await this.openai.chat.completions.create({
+        model: 'gpt-4-turbo-preview',
+        messages: [
+          {
+            role: 'system',
+            content: `You are an expert educational content analyzer. Watch the provided video and create a comprehensive educational summary.
+
+The summary should:
+- Be 3-4 paragraphs (300-500 words)
+- Capture all main learning objectives and key concepts
+- Highlight important definitions and explanations
+- Include practical examples mentioned in the video
+- Be suitable for generating multiple-choice quiz questions (include 5-10 potential quiz topics)
+- Use clear, academic language
+- Focus on educational value and learning outcomes
+
+Format your response as:
+SUMMARY:
+[Your detailed summary here]
+
+QUIZ TOPICS:
+- [Topic 1]
+- [Topic 2]
+- [Topic 3]
+...and more`,
+          },
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: `Please analyze this educational video and provide a comprehensive summary with suggested quiz topics: ${videoFileName}`,
+              },
+              {
+                type: 'video_url',
+                video_url: {
+                  url: processedUrl,
+                },
+              },
+            ] as any,
+          },
+        ],
+        temperature: 0.7,
+        max_tokens: 1000,
+      });
+
+      const content = response.choices[0].message.content?.trim();
+      if (!content) {
+        throw new InternalServerErrorException('Failed to generate summary from OpenAI response');
+      }
+
+      console.log('Successfully generated video summary using OpenAI');
+
+      return {
+        summary: content,
+        generatedAt: new Date(),
+      };
+    } catch (error) {
+      console.error('Error generating summary from video file:', error);
+      throw new InternalServerErrorException(
+        `Failed to generate summary from video: ${error.message}`,
+      );
+    }
+  }
+
+  /**
    * Extract transcript from video file or S3 URL
    * Supports video formats: MP4, MOV, MKV, AVI, etc.
    * Uses AWS Transcribe to generate accurate transcripts

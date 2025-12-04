@@ -1135,4 +1135,75 @@ Returns:
 
     return this.svc.generateVideoContentForLesson(lessonId, req.user.tenantId);
   }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('training_manager', 'instructor', 'org_admin')
+  @Post('lessons/:lessonId/generate-summary-openai')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ 
+    summary: 'Generate video summary using OpenAI (No Transcribe)',
+    description: `Generate video summary directly from video file using OpenAI Vision API.
+    
+⚡ FASTER ALTERNATIVE to AWS Transcribe:
+- Generates summary in 1-2 minutes (vs 5-30 minutes for Transcribe)
+- Perfect when you just need a summary, not full transcript
+- Uses OpenAI's vision capabilities to analyze video content
+- Automatically includes suggested quiz topics
+
+Response includes:
+- Comprehensive educational summary (300-500 words)
+- Suggested quiz topics extracted from the video
+- Generated timestamp
+
+Process:
+1. Sends video from S3 directly to OpenAI
+2. OpenAI analyzes video and generates summary
+3. Summary saved to lesson's videoSummary field
+4. Returns both summary and quiz topics`,
+  })
+  @ApiParam({ name: 'lessonId', type: String, description: 'Lesson ID with uploaded video' })
+  @ApiQuery({ name: 'courseId', type: String, description: 'Course ID for access validation' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Video summary generated successfully via OpenAI',
+    schema: {
+      example: {
+        lessonId: 'les-001',
+        videoUrl: 's3://bucket/video.mp4',
+        summary: `SUMMARY:
+JavaScript is a versatile programming language that runs in web browsers and on servers. Key concepts include variables, functions, and event handling. This video covers the fundamentals needed for web development...
+
+QUIZ TOPICS:
+- JavaScript basics and variable types
+- Functions and scope in JavaScript
+- DOM manipulation and event listeners
+- Promises and async/await patterns
+...`,
+        message: 'Video summary generated successfully using OpenAI',
+        generatedAt: '2025-12-04T10:00:00Z',
+        saved: true,
+        videoSummaryUpdated: true
+      }
+    }
+  })
+  @ApiResponse({ status: 400, description: 'No video found for lesson' })
+  @ApiResponse({ status: 404, description: 'Lesson not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 500, description: 'OpenAI API error' })
+  async generateSummaryFromVideoOpenAI(
+    @Request() req,
+    @Param('lessonId') lessonId: string,
+    @Query('courseId') courseId: string
+  ): Promise<any> {
+    if (!courseId) {
+      throw new BadRequestException('courseId query parameter is required');
+    }
+
+    const course = await this.svc.get(courseId);
+    if (!course || req.user.tenantId !== course.tenantId) {
+      throw new BadRequestException('You do not have access to this course');
+    }
+
+    return this.svc.generateSummaryFromVideoFile(lessonId, courseId, req.user.tenantId);
+  }
 }
