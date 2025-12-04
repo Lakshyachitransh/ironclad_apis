@@ -200,32 +200,13 @@ export class CoursesService {
       // Convert videoDuration to integer if provided
       const duration = videoDuration ? parseInt(String(videoDuration), 10) : null;
 
-      // Extract transcript and generate summary (async, non-blocking)
-      let videoSummary = null;
-      try {
-        const transcriptResult = await this.videoTranscriptionService.extractTranscriptFromVideo(
-          file.path,
-          fileName,
-          lessonId,
-        );
-        
-        // Generate summary from transcript
-        videoSummary = await this.videoTranscriptionService.generateVideoSummary(
-          transcriptResult.transcript,
-        );
-      } catch (transcriptionError) {
-        // Log error but don't fail the upload - summary is optional
-        console.warn('Failed to generate video summary:', transcriptionError.message);
-      }
-
-      // Update lesson with video information and summary
+      // Update lesson with video information
       const updatedLesson = await this.prisma.lesson.update({
         where: { id: lessonId },
         data: {
           videoFileName: fileName,
           videoUrl: videoUrl,
           videoDuration: duration,
-          videoSummary: videoSummary,
         },
       });
 
@@ -234,7 +215,7 @@ export class CoursesService {
         lesson: updatedLesson,
         fileSize: file.size,
         s3Url: videoUrl,
-        summaryGenerated: !!videoSummary,
+        note: 'Use POST /lessons/:lessonId/generate-summary-openai to generate video summary',
       };
     } catch (error) {
       throw new BadRequestException(`Failed to upload video: ${error.message}`);
@@ -847,162 +828,6 @@ export class CoursesService {
         }))
       }))
     };
-  }
-
-  /**
-   * Extract transcript from lesson video
-   */
-  async extractTranscriptFromLesson(lessonId: string, courseId: string, tenantId: string): Promise<any> {
-    // Verify lesson exists and belongs to tenant
-    const lesson = await this.prisma.lesson.findUnique({
-      where: { id: lessonId },
-      include: { module: { include: { course: true } } }
-    });
-
-    if (!lesson || lesson.module.course.tenantId !== tenantId) {
-      throw new NotFoundException('Lesson not found or access denied');
-    }
-
-    // Verify video exists
-    if (!lesson.videoUrl) {
-      throw new BadRequestException('No video found for this lesson');
-    }
-
-    // Extract transcript from video using transcription service
-    const transcriptResult = await this.videoTranscriptionService.extractTranscriptFromVideo(
-      lesson.videoUrl,
-      lesson.videoFileName || 'video.mp4',
-      lessonId
-    );
-
-    // Save transcript to database
-    await this.videoTranscriptionService.saveTranscriptToDatabase(
-      lessonId,
-      transcriptResult.transcript,
-      {
-        duration: transcriptResult.duration,
-        language: transcriptResult.language,
-        wordCount: transcriptResult.wordCount,
-        confidence: transcriptResult.confidence,
-      }
-    );
-
-    return transcriptResult;
-  }
-
-  /**
-   * Get saved transcript for lesson
-   */
-  async getTranscriptForLesson(lessonId: string, tenantId: string): Promise<any> {
-    // Verify lesson exists and belongs to tenant
-    const lesson = await this.prisma.lesson.findUnique({
-      where: { id: lessonId },
-      include: { module: { include: { course: true } } }
-    });
-
-    if (!lesson || lesson.module.course.tenantId !== tenantId) {
-      throw new NotFoundException('Lesson not found or access denied');
-    }
-
-    return this.videoTranscriptionService.getTranscriptForLesson(lessonId);
-  }
-
-  /**
-   * Generate transcript summary
-   */
-  async generateTranscriptSummary(transcript: string): Promise<any> {
-    const summary = await this.videoTranscriptionService.generateTranscriptSummary(transcript);
-    
-    return {
-      summary,
-      originalLength: transcript.length,
-      summaryLength: summary.length,
-      compressionRatio: Math.round((summary.length / transcript.length) * 100) / 100
-    };
-  }
-
-  /**
-   * Generate video content (transcript + summary) for a lesson
-   * Extracts transcript from video and generates AI summary
-   */
-  async generateVideoContentForLesson(lessonId: string, tenantId: string): Promise<any> {
-    // Get lesson with video
-    const lesson = await this.prisma.lesson.findUnique({
-      where: { id: lessonId },
-      include: { module: { include: { course: true } } }
-    });
-
-    if (!lesson) {
-      throw new NotFoundException('Lesson not found');
-    }
-
-    if (lesson.module.course.tenantId !== tenantId) {
-      throw new BadRequestException('You do not have access to this lesson');
-    }
-
-    if (!lesson.videoUrl) {
-      throw new BadRequestException('No video uploaded for this lesson');
-    }
-
-    try {
-      // Check if already have transcript saved
-      let transcript = '';
-      
-      try {
-        const transcriptResult = await this.videoTranscriptionService.extractTranscriptFromVideo(
-          lesson.videoUrl,
-          lesson.videoFileName || 'video',
-          lessonId,
-        );
-        transcript = transcriptResult.transcript;
-      } catch (transcriptError) {
-        // If transcript extraction fails, use video summary if available
-        if (lesson.videoSummary) {
-          transcript = lesson.videoSummary;
-        } else {
-          throw new InternalServerErrorException('Failed to extract transcript from video');
-        }
-      }
-
-      // Generate summary from transcript
-      let summary = '';
-      try {
-        summary = await this.videoTranscriptionService.generateVideoSummary(transcript);
-      } catch (summaryError) {
-        console.warn('Failed to generate summary:', summaryError.message);
-        summary = transcript.substring(0, 300) + '...'; // Fallback to first 300 chars
-      }
-
-      // Update lesson with generated summary
-      const updatedLesson = await this.prisma.lesson.update({
-        where: { id: lessonId },
-        data: {
-          videoSummary: summary,
-        },
-      });
-
-      return {
-        lessonId,
-        videoUrl: lesson.videoUrl,
-        transcript,
-        summary,
-        message: 'Video content extracted and summary generated successfully',
-        generatedAt: new Date().toISOString(),
-        saved: true,
-        videoSummaryUpdated: true,
-      };
-    } catch (error) {
-      throw new InternalServerErrorException(
-        `Failed to generate video content: ${error.message}`
-      );
-    }
-  }
-
-  /**
-   * Check transcription job status
-   */
-  async checkTranscriptionStatus(jobName: string): Promise<any> {
-    return this.videoTranscriptionService.checkTranscriptionStatus(jobName);
   }
 
   /**
