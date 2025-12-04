@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
-import * as AWS from 'aws-sdk';
 
 @Injectable()
 export class EmailService {
@@ -8,17 +7,28 @@ export class EmailService {
   private readonly logger = new Logger('EmailService');
 
   constructor() {
-    // Configure AWS SES
-    const ses = new AWS.SES({
-      accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-      region: process.env.AWS_REGION || 'us-east-1'
+    // Configure SMTP transporter for AWS SES
+    // SES SMTP endpoint format: email-smtp.{region}.amazonaws.com
+    const sesSmtpEndpoint = `email-smtp.${process.env.AWS_REGION || 'us-east-1'}.amazonaws.com`;
+    
+    this.transporter = nodemailer.createTransport({
+      host: sesSmtpEndpoint,
+      port: 587, // TLS port for SES
+      secure: false, // Use STARTTLS, not SSL
+      auth: {
+        user: process.env.AWS_SES_SMTP_USERNAME || process.env.AWS_ACCESS_KEY_ID,
+        pass: process.env.AWS_SES_SMTP_PASSWORD || process.env.AWS_SECRET_ACCESS_KEY
+      }
     });
 
-    // Create nodemailer transporter using AWS SES
-    this.transporter = nodemailer.createTransport({
-      SES: { ses, aws: AWS }
-    } as any);
+    // Verify connection
+    this.transporter.verify((error, success) => {
+      if (error) {
+        this.logger.warn(`Email transporter verification failed: ${error.message}`);
+      } else {
+        this.logger.log('Email transporter verified successfully');
+      }
+    });
   }
 
   /**

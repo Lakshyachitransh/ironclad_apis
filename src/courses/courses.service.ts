@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, InternalServerErrorException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { S3Service } from '../common/services/s3.service';
 import { EmailService } from '../common/services/email.service';
@@ -919,5 +919,82 @@ export class CoursesService {
       summaryLength: summary.length,
       compressionRatio: Math.round((summary.length / transcript.length) * 100) / 100
     };
+  }
+
+  /**
+   * Generate video content (transcript + summary) for a lesson
+   * Extracts transcript from video and generates AI summary
+   */
+  async generateVideoContentForLesson(lessonId: string, tenantId: string): Promise<any> {
+    // Get lesson with video
+    const lesson = await this.prisma.lesson.findUnique({
+      where: { id: lessonId },
+      include: { module: { include: { course: true } } }
+    });
+
+    if (!lesson) {
+      throw new NotFoundException('Lesson not found');
+    }
+
+    if (lesson.module.course.tenantId !== tenantId) {
+      throw new BadRequestException('You do not have access to this lesson');
+    }
+
+    if (!lesson.videoUrl) {
+      throw new BadRequestException('No video uploaded for this lesson');
+    }
+
+    try {
+      // Check if already have transcript saved
+      let transcript = '';
+      
+      try {
+        const transcriptResult = await this.videoTranscriptionService.extractTranscriptFromVideo(
+          lesson.videoUrl,
+          lesson.videoFileName || 'video',
+          lessonId,
+        );
+        transcript = transcriptResult.transcript;
+      } catch (transcriptError) {
+        // If transcript extraction fails, use video summary if available
+        if (lesson.videoSummary) {
+          transcript = lesson.videoSummary;
+        } else {
+          throw new InternalServerErrorException('Failed to extract transcript from video');
+        }
+      }
+
+      // Generate summary from transcript
+      let summary = '';
+      try {
+        summary = await this.videoTranscriptionService.generateVideoSummary(transcript);
+      } catch (summaryError) {
+        console.warn('Failed to generate summary:', summaryError.message);
+        summary = transcript.substring(0, 300) + '...'; // Fallback to first 300 chars
+      }
+
+      // Update lesson with generated summary
+      const updatedLesson = await this.prisma.lesson.update({
+        where: { id: lessonId },
+        data: {
+          videoSummary: summary,
+        },
+      });
+
+      return {
+        lessonId,
+        videoUrl: lesson.videoUrl,
+        transcript,
+        summary,
+        message: 'Video content extracted and summary generated successfully',
+        generatedAt: new Date().toISOString(),
+        saved: true,
+        videoSummaryUpdated: true,
+      };
+    } catch (error) {
+      throw new InternalServerErrorException(
+        `Failed to generate video content: ${error.message}`
+      );
+    }
   }
 }

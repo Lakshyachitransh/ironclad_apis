@@ -1011,4 +1011,67 @@ Uses:
   ): Promise<any> {
     return this.svc.generateTranscriptSummary(dto.transcript);
   }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('training_manager', 'instructor', 'org_admin')
+  @Get('lessons/:lessonId/generate-video-content')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ 
+    summary: 'Generate video content summary for a lesson',
+    description: `Extracts transcript from lesson video and generates AI-powered content summary.
+    
+Process:
+1. Retrieves lesson with video URL
+2. Extracts transcript from video using AWS Transcribe
+3. Generates concise AI summary using OpenAI GPT-4
+4. Stores summary in lesson (videoSummary field)
+5. Returns both raw transcript and generated summary
+
+Use Cases:
+- Generate lesson descriptions automatically
+- Create content for quiz generation
+- Create study materials from videos
+- Auto-populate lesson content
+
+Returns:
+- transcript: Full video transcript
+- summary: AI-generated concise summary (2-3 paragraphs)
+- lessonId: Associated lesson ID
+- videoUrl: Source video URL`
+  })
+  @ApiParam({ name: 'lessonId', type: String, description: 'Lesson ID with uploaded video' })
+  @ApiQuery({ name: 'courseId', type: String, description: 'Course ID for access validation' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Video content generated successfully',
+    schema: {
+      example: {
+        lessonId: 'les-001',
+        videoUrl: 's3://bucket/video.mp4',
+        transcript: 'Full transcript of the video content...',
+        summary: 'JavaScript is a programming language used for web development. It runs in browsers and enables interactive web pages through DOM manipulation and event handling. Key concepts include variables, functions, callbacks, promises, and async/await patterns.',
+        message: 'Video content extracted and summary generated successfully',
+        generatedAt: '2025-12-04T10:00:00Z'
+      }
+    }
+  })
+  @ApiResponse({ status: 400, description: 'No video found for lesson' })
+  @ApiResponse({ status: 404, description: 'Lesson not found' })
+  @ApiResponse({ status: 500, description: 'Transcription or summary generation failed' })
+  async generateVideoContent(
+    @Request() req,
+    @Param('lessonId') lessonId: string,
+    @Query('courseId') courseId: string
+  ): Promise<any> {
+    if (!courseId) {
+      throw new BadRequestException('courseId query parameter is required');
+    }
+
+    const course = await this.svc.get(courseId);
+    if (!course || req.user.tenantId !== course.tenantId) {
+      throw new BadRequestException('You do not have access to this course');
+    }
+
+    return this.svc.generateVideoContentForLesson(lessonId, req.user.tenantId);
+  }
 }
