@@ -41,7 +41,7 @@ export class VideoTranscriptionService {
 
     try {
       const response = await this.openai.chat.completions.create({
-        model: 'gpt-4-turbo-preview',
+        model: 'gpt-4o',
         messages: [
           {
             role: 'system',
@@ -106,7 +106,7 @@ Return ONLY the summary text, no additional formatting or explanations.`,
 
       // Call OpenAI Vision API with video file
       const response = await this.openai.chat.completions.create({
-        model: 'gpt-4-turbo-preview',
+        model: 'gpt-4o',
         messages: [
           {
             role: 'system',
