@@ -665,116 +665,26 @@ Statistics include:
   // ============================================================================
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('training_manager', 'instructor', 'org_admin')
-  @Post('lessons/:lessonId/generate-quizzes')
-  @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ 
-    summary: 'Generate quizzes from video content using AI',
-    description: `Generates 6 multiple-choice quizzes from video content using OpenAI's GPT-4 model.
-    
-Features:
-- Automatically generates exactly 6 quizzes
-- Each quiz has 4 multiple-choice options
-- Includes difficulty levels (easy, medium, hard)
-- Provides explanations for correct answers
-- Saves generated quizzes to database
-- Returns structured quiz data with questions and options
-
-The video content can be:
-1. Raw transcript/subtitles
-2. Lesson summary
-3. Video description
-
-Generated quizzes are immediately available for student attempts.`
-  })
-  @ApiParam({ name: 'lessonId', type: String, description: 'Lesson ID to generate quizzes for' })
-  @ApiBody({ type: GenerateQuizFromVideoDto })
-  @ApiResponse({ 
-    status: 201, 
-    description: 'Quizzes generated successfully',
-    schema: {
-      example: {
-        quizzes: [
-          {
-            id: 'quiz-id-1',
-            title: 'Quiz 1: Fundamentals',
-            description: 'Assessment of fundamental concepts',
-            passingScore: 70,
-            questionCount: 1,
-            questions: [
-              {
-                id: 'question-1',
-                questionText: 'What is the primary purpose of...?',
-                explanation: 'The correct answer is B because...',
-                order: 1,
-                options: [
-                  {
-                    id: 'option-1',
-                    optionText: 'Option A',
-                    order: 0
-                  },
-                  {
-                    id: 'option-2',
-                    optionText: 'Option B (Correct)',
-                    order: 1
-                  },
-                  {
-                    id: 'option-3',
-                    optionText: 'Option C',
-                    order: 2
-                  },
-                  {
-                    id: 'option-4',
-                    optionText: 'Option D',
-                    order: 3
-                  }
-                ]
-              }
-            ]
-          }
-        ],
-        generatedAt: '2025-11-27T10:30:00Z',
-        lessonId: 'les-001',
-        videoContentSummary: 'First 200 characters of processed content...'
-      }
-    }
-  })
-  @ApiResponse({ status: 400, description: 'Missing video content or invalid input' })
-  @ApiResponse({ status: 401, description: 'Unauthorized - insufficient permissions' })
-  @ApiResponse({ status: 404, description: 'Lesson not found' })
-  @ApiResponse({ status: 500, description: 'OpenAI API error or database error' })
-  async generateQuizzesFromVideo(
-    @Request() req,
-    @Param('lessonId') lessonId: string,
-    @Body() dto: GenerateQuizFromVideoDto
-  ): Promise<any> {
-    if (!dto.videoContent || dto.videoContent.trim().length === 0) {
-      throw new BadRequestException('videoContent is required and cannot be empty');
-    }
-
-    const course = await this.svc.get(dto.courseId);
-    if (!course || req.user.tenantId !== course.tenantId) {
-      throw new BadRequestException('You do not have access to this course');
-    }
-
-    return this.svc.generateQuizzesFromVideo(lessonId, dto.videoContent, dto.courseId, req.user.tenantId);
-  }
-
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('training_manager', 'org_admin')
   @Post('lessons/:lessonId/generate-quizzes-from-summary')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ 
     summary: 'Generate quizzes from stored video summary',
-    description: `Generates 6 multiple-choice quizzes from the video summary that was automatically created during video upload.
+    description: `Generates 6 multiple-choice quizzes from the manually added video summary.
     
-This is more efficient than the raw video content method:
-- Uses AI-processed video summary
-- Faster generation
-- Better quiz quality
-- No need to provide raw transcript
+Workflow:
+1. Upload video using /upload-video endpoint
+2. Manually add summary using /add-summary endpoint
+3. Generate quizzes using this endpoint
 
-Note: Video summary is automatically generated when you upload a video using the /upload-video endpoint.`
+Features:
+- Generates exactly 6 multiple-choice quizzes
+- Each quiz has 4 answer options
+- Includes difficulty levels (easy, medium, hard)
+- Provides explanations for correct answers
+- Automatically saves quizzes to database
+
+Note: Summary must be added first using the /add-summary endpoint before generating quizzes.`
   })
   @ApiParam({ name: 'lessonId', type: String, description: 'Lesson ID' })
   @ApiBody({
@@ -883,71 +793,72 @@ Note: Video summary is automatically generated when you upload a video using the
     return this.svc.getQuizDetails(quizId, req.user.tenantId);
   }
 
-  // ============================================================================
-  // Video Content Generation (OpenAI Only)
-  // ============================================================================
-
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('training_manager', 'instructor', 'org_admin')
-  @Post('lessons/:lessonId/generate-summary-openai')
-  @HttpCode(HttpStatus.OK)
+  @Post('lessons/:lessonId/add-summary')
+  @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ 
-    summary: 'Generate video summary using OpenAI (No Transcribe)',
-    description: `Generate video summary directly from video file using OpenAI Vision API.
+    summary: 'Add manual video summary to lesson',
+    description: `Manually add a video summary for a lesson. This summary will be used to generate quizzes.
     
-⚡ FASTER ALTERNATIVE to AWS Transcribe:
-- Generates summary in 1-2 minutes (vs 5-30 minutes for Transcribe)
-- Perfect when you just need a summary, not full transcript
-- Uses OpenAI's vision capabilities to analyze video content
-- Automatically includes suggested quiz topics
-
-Response includes:
-- Comprehensive educational summary (300-500 words)
-- Suggested quiz topics extracted from the video
-- Generated timestamp
+Workflow:
+1. Upload video using /upload-video endpoint
+2. Manually create a summary based on the video content
+3. Add summary using this endpoint
+4. Generate quizzes from the summary using /generate-quizzes-from-summary
 
 Process:
-1. Sends video from S3 directly to OpenAI
-2. OpenAI analyzes video and generates summary
-3. Summary saved to lesson's videoSummary field
-4. Returns both summary and quiz topics`,
+- Accepts a text summary created by the course instructor
+- Saves the summary to the lesson record
+- Makes it available for quiz generation`,
   })
-  @ApiParam({ name: 'lessonId', type: String, description: 'Lesson ID with uploaded video' })
-  @ApiQuery({ name: 'courseId', type: String, description: 'Course ID for access validation' })
+  @ApiParam({ name: 'lessonId', type: String, description: 'Lesson ID to add summary for' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        courseId: {
+          type: 'string',
+          description: 'Course ID for access validation',
+          example: 'course-123'
+        },
+        summary: {
+          type: 'string',
+          description: 'Lesson video summary (300-500 words recommended)',
+          example: 'JavaScript is a versatile programming language that runs in web browsers and on servers...'
+        }
+      },
+      required: ['courseId', 'summary']
+    }
+  })
   @ApiResponse({ 
-    status: 200, 
-    description: 'Video summary generated successfully via OpenAI',
+    status: 201, 
+    description: 'Summary added successfully',
     schema: {
       example: {
         lessonId: 'les-001',
-        videoUrl: 's3://bucket/video.mp4',
-        summary: `SUMMARY:
-JavaScript is a versatile programming language that runs in web browsers and on servers. Key concepts include variables, functions, and event handling. This video covers the fundamentals needed for web development...
-
-QUIZ TOPICS:
-- JavaScript basics and variable types
-- Functions and scope in JavaScript
-- DOM manipulation and event listeners
-- Promises and async/await patterns
-...`,
-        message: 'Video summary generated successfully using OpenAI',
-        generatedAt: '2025-12-04T10:00:00Z',
+        message: 'Summary added successfully',
+        summaryLength: 350,
         saved: true,
-        videoSummaryUpdated: true
+        addedAt: '2025-12-04T10:00:00Z'
       }
     }
   })
-  @ApiResponse({ status: 400, description: 'No video found for lesson' })
+  @ApiResponse({ status: 400, description: 'Missing courseId or summary' })
   @ApiResponse({ status: 404, description: 'Lesson not found' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 500, description: 'OpenAI API error' })
-  async generateSummaryFromVideoOpenAI(
+  async addLessonSummary(
     @Request() req,
     @Param('lessonId') lessonId: string,
-    @Query('courseId') courseId: string
+    @Body('courseId') courseId: string,
+    @Body('summary') summary: string
   ): Promise<any> {
-    if (!courseId) {
-      throw new BadRequestException('courseId query parameter is required');
+    if (!courseId || !summary) {
+      throw new BadRequestException('courseId and summary are required');
+    }
+
+    if (summary.trim().length === 0) {
+      throw new BadRequestException('summary cannot be empty');
     }
 
     const course = await this.svc.get(courseId);
@@ -955,6 +866,6 @@ QUIZ TOPICS:
       throw new BadRequestException('You do not have access to this course');
     }
 
-    return this.svc.generateSummaryFromVideoFile(lessonId, courseId, req.user.tenantId);
+    return this.svc.saveLessonSummary(lessonId, courseId, summary, req.user.tenantId);
   }
 }
