@@ -997,4 +997,11 @@ export class CoursesService {
       );
     }
   }
+
+  /**
+   * Check transcription job status
+   */
+  async checkTranscriptionStatus(jobName: string): Promise<any> {
+    return this.videoTranscriptionService.checkTranscriptionStatus(jobName);
+  }
 }

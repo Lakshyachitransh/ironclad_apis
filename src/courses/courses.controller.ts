@@ -947,6 +947,63 @@ Transcription process takes 1-5 minutes depending on video length.`
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('training_manager', 'instructor', 'org_admin', 'learner', 'viewer')
+  @Get('lessons/:lessonId/transcript-status')
+  @ApiOperation({ 
+    summary: 'Check transcription job status',
+    description: `Polls the status of an ongoing transcription job. Use this endpoint to check when the transcription is complete.
+    
+Response statuses:
+- IN_PROGRESS: Transcription is still processing (check again in 10-30 seconds)
+- COMPLETED: Transcription is done, transcript is ready
+- FAILED: Transcription job failed
+
+Usage:
+1. Call POST /extract-transcript (returns IN_PROGRESS immediately)
+2. Poll this endpoint every 10-30 seconds with the jobName returned
+3. When status is COMPLETED, the transcript field will contain the full text`
+  })
+  @ApiParam({ name: 'lessonId', type: String, description: 'Lesson ID' })
+  @ApiQuery({ name: 'jobName', type: String, description: 'Job name from extract-transcript response' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Job status retrieved',
+    schema: {
+      example: {
+        status: 'COMPLETED',
+        transcript: 'Full transcript text here...',
+        duration: 3600,
+        language: 'en-US',
+        wordCount: 2543,
+        confidence: 95
+      }
+    }
+  })
+  @ApiResponse({ status: 400, description: 'Invalid jobName' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async checkTranscriptionStatus(
+    @Request() req,
+    @Param('lessonId') lessonId: string,
+    @Query('jobName') jobName: string,
+    @Query('courseId') courseId: string
+  ): Promise<any> {
+    if (!jobName) {
+      throw new BadRequestException('jobName query parameter is required');
+    }
+
+    if (!courseId) {
+      throw new BadRequestException('courseId query parameter is required');
+    }
+
+    const course = await this.svc.get(courseId);
+    if (!course || req.user.tenantId !== course.tenantId) {
+      throw new BadRequestException('You do not have access to this course');
+    }
+
+    return this.svc.checkTranscriptionStatus(jobName);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('training_manager', 'instructor', 'org_admin', 'learner', 'viewer')
   @Get('lessons/:lessonId/transcript')
   @ApiOperation({ 
     summary: 'Get transcript for a lesson',

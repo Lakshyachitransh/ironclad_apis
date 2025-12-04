@@ -94,6 +94,7 @@ Return ONLY the summary text, no additional formatting or explanations.`,
     confidence: number;
     status: string;
     extractedAt: Date;
+    jobName?: string;
   }> {
     try {
       let videoUrl: string;
@@ -141,6 +142,7 @@ Return ONLY the summary text, no additional formatting or explanations.`,
         confidence: 0,
         status: transcriptionJob.jobStatus || 'IN_PROGRESS',
         extractedAt: new Date(),
+        jobName: jobName,
       };
     } catch (error) {
       throw new InternalServerErrorException(
