@@ -78,7 +78,7 @@ Return ONLY the summary text, no additional formatting or explanations.`,
   }
 
   /**
-   * Extract transcript from video file
+   * Extract transcript from video file or S3 URL
    * Supports video formats: MP4, MOV, MKV, AVI, etc.
    * Uses AWS Transcribe to generate accurate transcripts
    */
@@ -96,23 +96,32 @@ Return ONLY the summary text, no additional formatting or explanations.`,
     extractedAt: Date;
   }> {
     try {
-      // Validate video file exists
-      if (!fs.existsSync(videoFilePath)) {
-        throw new BadRequestException('Video file not found');
+      let videoUrl: string;
+
+      // Check if it's already an S3 URL
+      if (videoFilePath.startsWith('http')) {
+        // It's already an S3 URL, use it directly
+        videoUrl = videoFilePath;
+        console.log('Using S3 URL directly for transcription:', videoUrl);
+      } else {
+        // It's a local file path, upload to S3
+        if (!fs.existsSync(videoFilePath)) {
+          throw new BadRequestException('Video file not found');
+        }
+
+        // Get video file size
+        const fileStats = fs.statSync(videoFilePath);
+        const fileSizeInMB = fileStats.size / (1024 * 1024);
+
+        // AWS Transcribe has a max file size of 2GB, but we'll limit to 500MB
+        if (fileSizeInMB > 500) {
+          throw new BadRequestException('Video file exceeds 500MB size limit');
+        }
+
+        // Upload video to S3
+        const s3Key = `videos/transcription/${lessonId}/${videoFileName}`;
+        videoUrl = await this.uploadVideoToS3ForTranscription(videoFilePath, s3Key);
       }
-
-      // Get video file size
-      const fileStats = fs.statSync(videoFilePath);
-      const fileSizeInMB = fileStats.size / (1024 * 1024);
-
-      // AWS Transcribe has a max file size of 2GB, but we'll limit to 500MB
-      if (fileSizeInMB > 500) {
-        throw new BadRequestException('Video file exceeds 500MB size limit');
-      }
-
-      // Upload video to S3 if not already there
-      const s3Key = `videos/transcription/${lessonId}/${videoFileName}`;
-      const videoUrl = await this.uploadVideoToS3ForTranscription(videoFilePath, s3Key);
 
       // Start AWS Transcribe job
       const jobName = `transcribe-${lessonId}-${Date.now()}`;

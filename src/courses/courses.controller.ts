@@ -933,6 +933,10 @@ Transcription process takes 1-5 minutes depending on video length.`
     @Param('lessonId') lessonId: string,
     @Body() dto: ExtractTranscriptDto
   ): Promise<any> {
+    if (!dto.courseId) {
+      throw new BadRequestException('courseId is required in request body');
+    }
+
     const course = await this.svc.get(dto.courseId);
     if (!course || req.user.tenantId !== course.tenantId) {
       throw new BadRequestException('You do not have access to this course');
