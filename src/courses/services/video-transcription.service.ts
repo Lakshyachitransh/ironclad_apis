@@ -131,19 +131,15 @@ Return ONLY the summary text, no additional formatting or explanations.`,
         videoFileName,
       );
 
-      // Wait for transcription to complete
-      const completedJob = await this.waitForTranscriptionCompletion(jobName);
-
-      // Retrieve and parse transcript
-      const transcriptData = await this.getTranscriptFromJob(completedJob);
-
+      // Return job details immediately without waiting
+      // Client should poll the transcription status
       return {
-        transcript: transcriptData.transcript,
-        duration: transcriptData.duration,
-        language: transcriptData.language || 'en-US',
-        wordCount: transcriptData.wordCount,
-        confidence: transcriptData.confidence,
-        status: 'completed',
+        transcript: '',
+        duration: 0,
+        language: 'en-US',
+        wordCount: 0,
+        confidence: 0,
+        status: transcriptionJob.jobStatus || 'IN_PROGRESS',
         extractedAt: new Date(),
       };
     } catch (error) {
@@ -472,5 +468,49 @@ Return ONLY the summary text, no additional formatting or explanations.`,
     });
 
     return score;
+  }
+
+  /**
+   * Check transcription job status and retrieve transcript if completed
+   */
+  async checkTranscriptionStatus(
+    jobName: string,
+  ): Promise<{
+    status: string;
+    transcript?: string;
+    duration?: number;
+    language?: string;
+    wordCount?: number;
+    confidence?: number;
+  }> {
+    try {
+      const params = { TranscriptionJobName: jobName };
+      const result = await this.transcribeClient.getTranscriptionJob(params).promise();
+      const job = result.TranscriptionJob;
+
+      if (job.TranscriptionJobStatus === 'COMPLETED') {
+        const transcriptData = await this.getTranscriptFromJob(job);
+        return {
+          status: 'COMPLETED',
+          transcript: transcriptData.transcript,
+          duration: transcriptData.duration,
+          language: transcriptData.language,
+          wordCount: transcriptData.wordCount,
+          confidence: transcriptData.confidence,
+        };
+      } else if (job.TranscriptionJobStatus === 'FAILED') {
+        return {
+          status: 'FAILED',
+        };
+      }
+
+      return {
+        status: job.TranscriptionJobStatus,
+      };
+    } catch (error) {
+      throw new InternalServerErrorException(
+        `Failed to check transcription status: ${error.message}`,
+      );
+    }
   }
 }
