@@ -350,4 +350,79 @@ This endpoint allows organization admins to create administrative users for each
       password: body.password
     });
   }
+
+  @Roles('platform_admin')
+  @Get('users/all-organized')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get all users organized by tenant + platform admins',
+    description: `Retrieves all users in the system organized by tenant and platform administrators.
+    
+Shows:
+- All platform admin users across the system
+- All users grouped by their respective tenants
+- User count per tenant
+- Summary statistics
+
+Only platform_admin role can access this endpoint.`
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'All users organized by tenant and platform admins',
+    schema: {
+      example: {
+        success: true,
+        summary: {
+          totalTenants: 2,
+          totalPlatformAdmins: 1,
+          totalUsersAcrossAllTenants: 15
+        },
+        platformAdmins: [
+          {
+            id: 'user-123',
+            email: 'lakshya.srivastava@secnuo.com',
+            displayName: 'Platform Admin',
+            status: 'active',
+            roles: ['platform_admin', 'superadmin'],
+            userTenantId: 'ut-001',
+            type: 'platform_admin',
+            createdAt: '2025-12-05T10:00:00Z'
+          }
+        ],
+        tenants: [
+          {
+            tenantId: 'tenant-001',
+            tenantName: 'Tech Academy',
+            userCount: 8,
+            users: [
+              {
+                id: 'user-456',
+                email: 'admin@techacademy.com',
+                displayName: 'Academy Admin',
+                status: 'active',
+                roles: ['tenant_admin'],
+                userTenantId: 'ut-002',
+                createdAt: '2025-11-20T10:00:00Z'
+              },
+              {
+                id: 'user-789',
+                email: 'trainer@techacademy.com',
+                displayName: 'John Trainer',
+                status: 'active',
+                roles: ['training_manager'],
+                userTenantId: 'ut-003',
+                createdAt: '2025-11-21T10:00:00Z'
+              }
+            ]
+          }
+        ]
+      }
+    }
+  })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  @ApiResponse({ status: 400, description: 'Failed to fetch users' })
+  async getAllUsersOrganized() {
+    return this.adminService.getAllUsersOrganized();
+  }
 }
+

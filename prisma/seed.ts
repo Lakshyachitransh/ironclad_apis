@@ -19,7 +19,7 @@ async function main() {
     create: { name: 'platform' }
   });
 
-  const adminEmail = 'admin@ironclad.local';
+  const adminEmail = 'lakshya.srivastava@secnuo.com';
   const existing = await prisma.user.findUnique({ where: { email: adminEmail } });
   if (!existing) {
     const saltRounds = parseInt(process.env.BCRYPT_SALT_ROUNDS || '12', 10);

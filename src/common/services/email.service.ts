@@ -7,24 +7,23 @@ export class EmailService {
   private readonly logger = new Logger('EmailService');
 
   constructor() {
-    // Configure SMTP transporter for AWS SES
-    // SES SMTP endpoint format: email-smtp.{region}.amazonaws.com
-    const sesSmtpEndpoint = `email-smtp.${process.env.AWS_REGION || 'us-east-1'}.amazonaws.com`;
-    
-    // Try to get SES SMTP credentials from environment
-    const sesSmtpUsername = process.env.AWS_SES_SMTP_USERNAME || process.env.AWS_ACCESS_KEY_ID;
-    const sesSmtpPassword = process.env.AWS_SES_SMTP_PASSWORD || process.env.AWS_SECRET_ACCESS_KEY;
+    // Configure SMTP transporter with standard email service
+    const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
+    const smtpPort = parseInt(process.env.SMTP_PORT || '587', 10);
+    const smtpUser = process.env.SMTP_USER;
+    const smtpPassword = process.env.SMTP_PASSWORD;
+    const emailFrom = process.env.EMAIL_FROM || 'noreply@ironclad.local';
 
-    this.logger.log(`Initializing email service with SES endpoint: ${sesSmtpEndpoint}`);
-    this.logger.debug(`Using username: ${sesSmtpUsername ? sesSmtpUsername.substring(0, 10) + '***' : 'NOT SET'}`);
+    this.logger.log(`Initializing email service with SMTP: ${smtpHost}:${smtpPort}`);
+    this.logger.debug(`Using email: ${smtpUser ? smtpUser.substring(0, 10) + '***' : 'NOT SET'}`);
     
     this.transporter = nodemailer.createTransport({
-      host: sesSmtpEndpoint,
-      port: 587, // TLS port for SES
-      secure: false, // Use STARTTLS, not SSL
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpPort === 465, // Use SSL for port 465, TLS for 587
       auth: {
-        user: sesSmtpUsername,
-        pass: sesSmtpPassword
+        user: smtpUser,
+        pass: smtpPassword
       },
       logger: false,
       debug: false,
@@ -37,7 +36,7 @@ export class EmailService {
   }
 
   /**
-   * Verify SES connection
+   * Verify SMTP connection
    */
   async verifyConnection(): Promise<boolean> {
     try {
@@ -46,11 +45,11 @@ export class EmailService {
       return true;
     } catch (error) {
       this.logger.warn(`❌ Email transporter verification failed: ${error.message}`);
-      this.logger.warn('Possible causes:');
-      this.logger.warn('1. AWS_SES_SMTP_PASSWORD is not set correctly (should be different from AWS_SECRET_ACCESS_KEY)');
-      this.logger.warn('2. AWS credentials do not have SES permissions');
-      this.logger.warn('3. Email not verified in SES (check sender email in SES verified emails)');
-      this.logger.warn('4. SES sending limit reached or account in sandbox mode');
+      this.logger.warn('Troubleshooting:');
+      this.logger.warn('1. Check SMTP_HOST and SMTP_PORT in .env');
+      this.logger.warn('2. Verify SMTP_USER and SMTP_PASSWORD are correct');
+      this.logger.warn('3. For Gmail: Use app-specific password, not your main password');
+      this.logger.warn('4. Check firewall/network allows SMTP connections');
       return false;
     }
   }
@@ -130,7 +129,7 @@ This is an automated email. Please do not reply to this message.
       `;
 
       await this.transporter.sendMail({
-        from: process.env.SES_FROM_EMAIL || 'noreply@yourdomain.com',
+        from: process.env.EMAIL_FROM || 'noreply@ironclad.local',
         to: userEmail,
         subject: `Course Assignment: ${courseTitle}`,
         text: textContent,
@@ -218,7 +217,7 @@ This is an automated email. Please do not reply to this message.
       `;
 
       await this.transporter.sendMail({
-        from: process.env.SES_FROM_EMAIL || 'noreply@yourdomain.com',
+        from: process.env.EMAIL_FROM || 'noreply@ironclad.local',
         to: userEmail,
         subject: `Course Completed: ${courseTitle}`,
         html: htmlContent
@@ -258,11 +257,11 @@ This is an automated email. Please do not reply to this message.
       );
 
       await this.transporter.sendMail({
-        from: process.env.SES_FROM_EMAIL || 'noreply@ironclad.local',
+        from: process.env.EMAIL_FROM || 'noreply@ironclad.local',
         to: userEmail,
         subject: `🎉 Welcome to ${tenantName}! Your Account is Ready`,
         html: htmlContent,
-        replyTo: process.env.SES_FROM_EMAIL || 'noreply@ironclad.local'
+        replyTo: process.env.EMAIL_FROM || 'noreply@ironclad.local'
       });
 
       this.logger.log(`Welcome email sent successfully to ${userEmail}`);
@@ -278,7 +277,7 @@ This is an automated email. Please do not reply to this message.
   async testConnection(testEmail: string): Promise<boolean> {
     try {
       await this.transporter.sendMail({
-        from: process.env.SES_FROM_EMAIL || 'noreply@yourdomain.com',
+        from: process.env.EMAIL_FROM || 'noreply@ironclad.local',
         to: testEmail,
         subject: 'Email Service Test',
         text: 'If you received this email, your email service is working correctly!'

@@ -427,4 +427,101 @@ export class AdminService {
       throw new BadRequestException(`Failed to create tenant admin: ${error.message}`);
     }
   }
+
+  /**
+   * Get all users grouped by tenant + platform admin users
+   * Returns a comprehensive view of all users in the system
+   */
+  async getAllUsersOrganized() {
+    try {
+      // Get all tenants with their users
+      const tenants = await this.prisma.tenant.findMany({
+        include: {
+          users: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  email: true,
+                  displayName: true,
+                  status: true,
+                  createdAt: true
+                }
+              }
+            }
+          }
+        }
+      });
+
+      // Get platform admin users (users with platform_admin or superadmin role in platform tenant)
+      const platformTenant = await this.prisma.tenant.findUnique({
+        where: { name: 'platform' }
+      });
+
+      let platformAdmins = [];
+      if (platformTenant) {
+        platformAdmins = await this.prisma.userTenant.findMany({
+          where: {
+            tenantId: platformTenant.id,
+            roles: {
+              hasSome: ['platform_admin', 'superadmin']
+            }
+          },
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true,
+                displayName: true,
+                status: true,
+                createdAt: true
+              }
+            }
+          }
+        });
+      }
+
+      // Format response
+      const tenantWiseUsers = tenants
+        .filter(t => t.name !== 'platform') // exclude platform tenant from main list
+        .map(tenant => ({
+          tenantId: tenant.id,
+          tenantName: tenant.name,
+          userCount: tenant.users.length,
+          users: tenant.users.map(ut => ({
+            id: ut.user.id,
+            email: ut.user.email,
+            displayName: ut.user.displayName,
+            status: ut.user.status,
+            roles: ut.roles,
+            userTenantId: ut.id,
+            createdAt: ut.user.createdAt
+          }))
+        }));
+
+      const adminUsers = platformAdmins.map(ut => ({
+        id: ut.user.id,
+        email: ut.user.email,
+        displayName: ut.user.displayName,
+        status: ut.user.status,
+        roles: ut.roles,
+        userTenantId: ut.id,
+        createdAt: ut.user.createdAt,
+        type: 'platform_admin'
+      }));
+
+      return {
+        success: true,
+        summary: {
+          totalTenants: tenantWiseUsers.length,
+          totalPlatformAdmins: adminUsers.length,
+          totalUsersAcrossAllTenants: tenantWiseUsers.reduce((sum, t) => sum + t.userCount, 0)
+        },
+        platformAdmins: adminUsers,
+        tenants: tenantWiseUsers
+      };
+    } catch (error) {
+      throw new BadRequestException(`Failed to fetch organized users: ${error.message}`);
+    }
+  }
 }
