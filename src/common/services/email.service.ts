@@ -11,24 +11,48 @@ export class EmailService {
     // SES SMTP endpoint format: email-smtp.{region}.amazonaws.com
     const sesSmtpEndpoint = `email-smtp.${process.env.AWS_REGION || 'us-east-1'}.amazonaws.com`;
     
+    // Try to get SES SMTP credentials from environment
+    const sesSmtpUsername = process.env.AWS_SES_SMTP_USERNAME || process.env.AWS_ACCESS_KEY_ID;
+    const sesSmtpPassword = process.env.AWS_SES_SMTP_PASSWORD || process.env.AWS_SECRET_ACCESS_KEY;
+
+    this.logger.log(`Initializing email service with SES endpoint: ${sesSmtpEndpoint}`);
+    this.logger.debug(`Using username: ${sesSmtpUsername ? sesSmtpUsername.substring(0, 10) + '***' : 'NOT SET'}`);
+    
     this.transporter = nodemailer.createTransport({
       host: sesSmtpEndpoint,
       port: 587, // TLS port for SES
       secure: false, // Use STARTTLS, not SSL
       auth: {
-        user: process.env.AWS_SES_SMTP_USERNAME || process.env.AWS_ACCESS_KEY_ID,
-        pass: process.env.AWS_SES_SMTP_PASSWORD || process.env.AWS_SECRET_ACCESS_KEY
-      }
+        user: sesSmtpUsername,
+        pass: sesSmtpPassword
+      },
+      logger: false,
+      debug: false,
     });
 
-    // Verify connection
-    this.transporter.verify((error, success) => {
-      if (error) {
-        this.logger.warn(`Email transporter verification failed: ${error.message}`);
-      } else {
-        this.logger.log('Email transporter verified successfully');
-      }
+    // Verify connection asynchronously
+    this.verifyConnection().catch(err => {
+      this.logger.warn(`Email transporter verification failed: ${err.message}`);
     });
+  }
+
+  /**
+   * Verify SES connection
+   */
+  async verifyConnection(): Promise<boolean> {
+    try {
+      await this.transporter.verify();
+      this.logger.log('✅ Email transporter verified successfully');
+      return true;
+    } catch (error) {
+      this.logger.warn(`❌ Email transporter verification failed: ${error.message}`);
+      this.logger.warn('Possible causes:');
+      this.logger.warn('1. AWS_SES_SMTP_PASSWORD is not set correctly (should be different from AWS_SECRET_ACCESS_KEY)');
+      this.logger.warn('2. AWS credentials do not have SES permissions');
+      this.logger.warn('3. Email not verified in SES (check sender email in SES verified emails)');
+      this.logger.warn('4. SES sending limit reached or account in sandbox mode');
+      return false;
+    }
   }
 
   /**
