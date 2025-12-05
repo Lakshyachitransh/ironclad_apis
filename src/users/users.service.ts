@@ -1,11 +1,15 @@
 import { Injectable, BadRequestException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { EmailService } from '../common/services/email.service';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 
 @Injectable()
 export class UsersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private emailService: EmailService
+  ) {}
 
   // inside UsersService class
 
@@ -20,6 +24,7 @@ async createUserAndAttachToTenant(opts: {
   displayName?: string | null;
   tenantId: string;
   roles?: string[];
+  sendWelcomeEmail?: boolean;
 }) {
   const salt = parseInt(process.env.BCRYPT_SALT_ROUNDS || '12', 10);
   const passwordHash = await bcrypt.hash(opts.password, salt);
@@ -62,9 +67,23 @@ async createUserAndAttachToTenant(opts: {
         },
       });
 
-      // return minimal created user
-      return created;
+      // return minimal created user with password for email sending
+      return { ...created, tempPassword: opts.password, tenant };
     });
+
+    // 5) Send welcome email asynchronously (don't wait for it)
+    if (opts.sendWelcomeEmail !== false) {
+      const loginUrl = process.env.APP_LOGIN_URL || 'https://app.ironclad.local/login';
+      this.emailService.sendWelcomeEmail(
+        result.email,
+        result.displayName || result.email.split('@')[0],
+        result.tempPassword,
+        result.tenant.name,
+        loginUrl
+      ).catch(err => {
+        console.error('Failed to send welcome email:', err);
+      });
+    }
 
     return result;
   } catch (err) {

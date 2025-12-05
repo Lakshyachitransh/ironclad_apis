@@ -3,6 +3,7 @@ import { MulterModule } from '@nestjs/platform-express';
 import { UsersService } from './users.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersController } from './users.controller';
+import { EmailService } from '../common/services/email.service';
 
 @Module({
   imports: [
@@ -13,7 +14,7 @@ import { UsersController } from './users.controller';
       },
     }),
   ],
-  providers: [UsersService, PrismaService],
+  providers: [UsersService, PrismaService, EmailService],
   controllers: [UsersController],
   exports: [UsersService]
 })

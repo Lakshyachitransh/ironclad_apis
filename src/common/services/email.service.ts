@@ -207,6 +207,48 @@ This is an automated email. Please do not reply to this message.
   }
 
   /**
+   * Send welcome email to new user with modern design
+   * @param userEmail - New user's email
+   * @param userName - User's display name
+   * @param tempPassword - Temporary password for first login
+   * @param tenantName - Organization/tenant name
+   * @param loginUrl - URL to login page
+   */
+  async sendWelcomeEmail(
+    userEmail: string,
+    userName: string,
+    tempPassword: string,
+    tenantName: string,
+    loginUrl: string = 'https://app.ironclad.local/login'
+  ): Promise<void> {
+    try {
+      // Import template dynamically to avoid circular dependencies
+      const { welcomeEmailTemplate } = await import('../templates/welcome-email.template');
+      
+      const htmlContent = welcomeEmailTemplate(
+        userName,
+        userEmail,
+        tempPassword,
+        tenantName,
+        loginUrl
+      );
+
+      await this.transporter.sendMail({
+        from: process.env.SES_FROM_EMAIL || 'noreply@ironclad.local',
+        to: userEmail,
+        subject: `🎉 Welcome to ${tenantName}! Your Account is Ready`,
+        html: htmlContent,
+        replyTo: process.env.SES_FROM_EMAIL || 'noreply@ironclad.local'
+      });
+
+      this.logger.log(`Welcome email sent successfully to ${userEmail}`);
+    } catch (error) {
+      this.logger.error(`Failed to send welcome email to ${userEmail}:`, error);
+      // Don't throw - email failure shouldn't block user creation
+    }
+  }
+
+  /**
    * Test SES configuration
    */
   async testConnection(testEmail: string): Promise<boolean> {
