@@ -26,27 +26,87 @@ model Tenant {
   courseAssignments CourseAssignment[]
   userProgress      UserProgress[]
   lessonProgress    LessonProgress[]
+  licenseAudits     LicenseAudit[]
 }
 
 model Application {
   id       String                     @id @default(uuid())
   code     String                     @unique
   name     String
+  description String?
+  category String? // e.g., "LMS", "Analytics", "Communication"
+  status   String                     @default("active")
+  createdAt DateTime                  @default(now())
   licenses TenantApplicationLicense[]
+  features ApplicationFeature[]
+}
+
+model ApplicationFeature {
+  id            String      @id @default(uuid())
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  applicationId String
+  code          String      // e.g., "VIDEO_UPLOAD", "QUIZ_GENERATION"
+  name          String
+  description   String?
+  createdAt     DateTime    @default(now())
+
+  @@unique([applicationId, code])
+  @@index([applicationId])
 }
 
 model TenantApplicationLicense {
-  id            String      @id @default(uuid())
-  tenant        Tenant      @relation(fields: [tenantId], references: [id])
-  tenantId      String
-  application   Application @relation(fields: [applicationId], references: [id])
-  applicationId String
-  plan          String?
-  seats         Int?        @default(0)
-  startAt       DateTime?
-  endAt         DateTime?
-  status        String      @default("active")
-  createdAt     DateTime    @default(now())
+  id              String      @id @default(uuid())
+  tenant          Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId        String
+  application     Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  applicationId   String
+  plan            String      @default("standard") // free, standard, premium, enterprise
+  maxSeats        Int         @default(1) // max number of users who can use this app
+  currentSeats    Int         @default(0) // current number of users using this app
+  startDate       DateTime
+  endDate         DateTime?   // null = no expiry
+  status          String      @default("active") // active, suspended, expired, cancelled
+  autoRenew       Boolean     @default(false)
+  notes           String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  createdBy       String?     // org admin user ID
+  licenseUsers    LicenseUser[]
+
+  @@unique([tenantId, applicationId], name: "tenant_app_license")
+  @@index([tenantId])
+  @@index([applicationId])
+  @@index([status])
+}
+
+model LicenseUser {
+  id              String                   @id @default(uuid())
+  license         TenantApplicationLicense @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  licenseId       String
+  userId          String // user who has been assigned this license
+  assignedAt      DateTime                 @default(now())
+  revokedAt       DateTime?
+  status          String                   @default("active") // active, inactive, revoked
+  lastAccessedAt  DateTime?
+  createdAt       DateTime                 @default(now())
+
+  @@unique([licenseId, userId], name: "license_user_unique")
+  @@index([licenseId])
+  @@index([userId])
+}
+
+model LicenseAudit {
+  id              String    @id @default(uuid())
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId        String
+  licenseId       String?
+  action          String    // create, assign, revoke, renew, expire
+  details         String?   // JSON details of the action
+  performedBy     String?   // user ID who performed the action
+  createdAt       DateTime  @default(now())
+
+  @@index([tenantId])
+  @@index([createdAt])
 }
 
 model User {

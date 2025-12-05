@@ -10,9 +10,10 @@ import { ConfigModule } from '@nestjs/config';
 import { CoursesModule } from './courses/courses.module';
 import { LiveClassModule } from './live-class/live-class.module';
 import { AdminModule } from './admin/admin.module';
+import { LicensesModule } from './licenses/licenses.module';
 
 @Module({
-  imports: [AuthModule, UsersModule, TenantsModule, RolesModule, CoursesModule, LiveClassModule, AdminModule, ConfigModule.forRoot({
+  imports: [AuthModule, UsersModule, TenantsModule, RolesModule, CoursesModule, LiveClassModule, AdminModule, LicensesModule, ConfigModule.forRoot({
       isGlobal: true,   // makes ConfigService available everywhere
       envFilePath: '.env', // optional: path(s) to env files
     })],
