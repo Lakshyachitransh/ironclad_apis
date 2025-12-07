@@ -12,6 +12,7 @@ This guide covers deploying the Ironclad APIs NestJS application to an AWS EC2 i
 ## Step 1: Create EC2 Instance
 
 ### Launch Instance
+
 1. Go to AWS Console → EC2 → Instances → Launch Instance
 2. **Choose AMI**: Select **Ubuntu Server 22.04 LTS** (t3.medium or larger recommended)
 3. **Instance Type**: `t3.medium` or `t3.large`
@@ -30,6 +31,7 @@ This guide covers deploying the Ironclad APIs NestJS application to an AWS EC2 i
 8. **Launch** the instance
 
 ### Note Instance Details
+
 - Public IP Address (will be used for SSH)
 - Instance ID
 - Key Pair name
@@ -37,6 +39,7 @@ This guide covers deploying the Ironclad APIs NestJS application to an AWS EC2 i
 ## Step 2: Connect to EC2 Instance
 
 ### Using Windows PowerShell/Git Bash
+
 ```bash
 # Change permissions on your key (Windows)
 icacls "C:\path\to\your-key.pem" /inheritance:r /grant:r "%username%:F"
@@ -46,6 +49,7 @@ ssh -i "C:\path\to\your-key.pem" ubuntu@<your-ec2-public-ip>
 ```
 
 ### Once Connected - Update System
+
 ```bash
 sudo apt update
 sudo apt upgrade -y
@@ -66,6 +70,7 @@ npm --version
 ## Step 4: Install PostgreSQL
 
 ### Option A: Local PostgreSQL (Recommended for Dev)
+
 ```bash
 # Install PostgreSQL
 sudo apt-get install -y postgresql postgresql-contrib
@@ -87,6 +92,7 @@ psql -h localhost -U ironclad_user -d ironclad -c "\dt"
 ```
 
 ### Option B: AWS RDS PostgreSQL (Production Recommended)
+
 1. Go to AWS RDS Console
 2. Create Database → PostgreSQL 14+
 3. DB Instance Identifier: `ironclad-db`
@@ -254,6 +260,7 @@ server {
 ```
 
 Enable the site:
+
 ```bash
 sudo ln -s /etc/nginx/sites-available/ironclad-api /etc/nginx/sites-enabled/ironclad-api
 sudo rm /etc/nginx/sites-enabled/default
@@ -303,26 +310,31 @@ curl http://<your-ec2-public-ip>/api/docs
 ## Troubleshooting
 
 ### Check PM2 logs
+
 ```bash
 pm2 logs ironclad-api --tail 50
 ```
 
 ### Check Nginx errors
+
 ```bash
 sudo tail -f /var/log/nginx/error.log
 ```
 
 ### Test database connection
+
 ```bash
 psql -h localhost -U ironclad_user -d ironclad -c "SELECT 1"
 ```
 
 ### Restart application
+
 ```bash
 pm2 restart ironclad-api
 ```
 
 ### Stop application
+
 ```bash
 pm2 stop ironclad-api
 ```
@@ -330,11 +342,13 @@ pm2 stop ironclad-api
 ## Monitoring and Maintenance
 
 ### View real-time monitoring
+
 ```bash
 pm2 monit
 ```
 
 ### View all process logs
+
 ```bash
 pm2 logs
 
@@ -349,6 +363,7 @@ pm2 flush
 ```
 
 ### Update application
+
 ```bash
 cd /home/ubuntu/ironclad_apis
 git pull origin main
@@ -377,6 +392,7 @@ pm2 restart ironclad-api
 ## Database Backup
 
 ### Manual Backup
+
 ```bash
 # Backup database
 pg_dump -U ironclad_user -d ironclad > ~/ironclad_backup_$(date +%Y%m%d).sql
@@ -386,6 +402,7 @@ psql -U ironclad_user -d ironclad < ~/ironclad_backup_*.sql
 ```
 
 ### Automated Backups (Cron)
+
 ```bash
 # Open crontab editor
 crontab -e
@@ -397,12 +414,14 @@ crontab -e
 ## Performance Tuning
 
 ### Enable PM2 Cluster Mode
+
 ```bash
 pm2 start dist/main.js --name "ironclad-api" --instances max
 pm2 save
 ```
 
 ### Nginx Caching (for static content)
+
 ```nginx
 location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
     expires 30d;
@@ -411,6 +430,7 @@ location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
 ```
 
 ### PostgreSQL Optimization
+
 ```bash
 sudo nano /etc/postgresql/14/main/postgresql.conf
 
@@ -431,6 +451,7 @@ Once deployed, you can access:
 ## Support
 
 For issues or questions:
+
 1. Check PM2 logs: `pm2 logs ironclad-api`
 2. Check Nginx logs: `sudo tail -f /var/log/nginx/error.log`
 3. Check PostgreSQL logs: `sudo tail -f /var/log/postgresql/postgresql.log`

@@ -8,13 +8,13 @@ Complete RBAC implementation for the Ironclad LMS platform with 6 roles, 19 perm
 
 ## 📚 Documentation Files
 
-| File | Purpose |
-|------|---------|
-| **RBAC_QUICK_REFERENCE.md** | 👉 **START HERE** - Quick commands and API examples |
-| **RBAC_IMPLEMENTATION.md** | Technical deep dive and architecture details |
-| **RBAC_DEPLOYMENT_SUMMARY.md** | Deployment checklist and production guide |
-| **RBAC_ARCHITECTURE_DIAGRAM.md** | Visual flow diagrams and database schema |
-| **This file** | Overview and navigation |
+| File                             | Purpose                                             |
+| -------------------------------- | --------------------------------------------------- |
+| **RBAC_QUICK_REFERENCE.md**      | 👉 **START HERE** - Quick commands and API examples |
+| **RBAC_IMPLEMENTATION.md**       | Technical deep dive and architecture details        |
+| **RBAC_DEPLOYMENT_SUMMARY.md**   | Deployment checklist and production guide           |
+| **RBAC_ARCHITECTURE_DIAGRAM.md** | Visual flow diagrams and database schema            |
+| **This file**                    | Overview and navigation                             |
 
 ---
 
@@ -39,14 +39,16 @@ http://localhost:3000/api/docs
 ## 🎯 What is RBAC?
 
 **Role-Based Access Control** is a security model where:
+
 - Users are assigned **Roles** (e.g., `org_admin`, `learner`)
 - Roles have **Permissions** (e.g., `manage_database`, `view_courses`)
 - Endpoints require specific roles to access
 
 **Example**:
+
 ```
-User "admin@example.com" 
-  → assigned role "org_admin" 
+User "admin@example.com"
+  → assigned role "org_admin"
   → org_admin has permission "manage_database"
   → can now access POST /api/admin/database/update-config ✅
 ```
@@ -102,6 +104,7 @@ All require: `@Roles('org_admin')`
 ## 🔒 How It Works
 
 ### 1. User Logs In
+
 ```bash
 POST /api/auth/login
 {
@@ -121,12 +124,14 @@ Response:
 ```
 
 ### 2. User Calls Protected Endpoint
+
 ```bash
 GET /api/admin/users/all-with-courses
 Authorization: Bearer eyJhbGciOiJIUzI1NiIs...
 ```
 
 ### 3. Guards Check Authorization
+
 ```
 Step 1: JwtAuthGuard validates token
         ✅ Valid → decode roles
@@ -141,6 +146,7 @@ Step 3: Endpoint executes
 ```
 
 ### 4. Non-Admin User Gets Denied
+
 ```
 User has: ['learner']
 Required: ['org_admin']
@@ -152,6 +158,7 @@ Required: ['org_admin']
 ## 💻 Common Commands
 
 ### Database Management
+
 ```bash
 # Clean and reset RBAC tables with fresh seed
 npm run rbac:reset
@@ -164,6 +171,7 @@ npm run rbac:seed
 ```
 
 ### Development
+
 ```bash
 # Start with hot reload
 npm run dev
@@ -176,6 +184,7 @@ npm run start:prod
 ```
 
 ### Testing
+
 ```bash
 # Run all tests
 npm test
@@ -192,6 +201,7 @@ npm test:watch
 ## 🔧 Configuration
 
 ### Environment Variables
+
 ```bash
 # Required
 DATABASE_URL=postgresql://user:pass@localhost:5432/ironclad
@@ -204,6 +214,7 @@ NODE_ENV=development
 ```
 
 ### Database Setup
+
 ```bash
 # Create database
 createdb ironclad
@@ -220,6 +231,7 @@ npm run rbac:seed
 ## 🧪 Testing Examples
 
 ### Test 1: Successful Admin Access
+
 ```bash
 # 1. Register
 POST /api/auth/register
@@ -258,6 +270,7 @@ Authorization: Bearer {token}
 ```
 
 ### Test 2: Rejected Non-Admin Access
+
 ```bash
 # Same setup but assign "learner" role instead
 
@@ -309,18 +322,21 @@ prisma/
 ## 🎓 Learning Path
 
 ### Beginner (5 min)
+
 1. Read this file
 2. Check RBAC_QUICK_REFERENCE.md
 3. Run `npm run rbac:seed`
 4. Try test examples above
 
 ### Intermediate (15 min)
+
 1. Read RBAC_IMPLEMENTATION.md
 2. Study `src/roles/roles.guard.ts`
 3. Review `src/admin/admin.controller.ts`
 4. Trace request flow in RBAC_ARCHITECTURE_DIAGRAM.md
 
 ### Advanced (30 min)
+
 1. Read RBAC_DEPLOYMENT_SUMMARY.md
 2. Study seed script in `prisma/seed-rbac.ts`
 3. Plan custom permissions for your domain
@@ -331,6 +347,7 @@ prisma/
 ## ⚠️ Important Notes
 
 ### Security
+
 - ✅ Passwords hashed with bcrypt
 - ✅ JWT tokens signed with secret
 - ✅ Tokens expire (configurable)
@@ -338,12 +355,14 @@ prisma/
 - ✅ No hardcoded role checks in code
 
 ### Database
+
 - ✅ Foreign key constraints prevent orphaned data
 - ✅ Cleanup scripts respect dependencies
 - ✅ Migrations versioned and reproducible
 - ✅ Easy to reset RBAC without losing other data
 
 ### Production
+
 - ✅ Ready for deployment
 - ✅ Tested authentication flow
 - ✅ Comprehensive error handling
@@ -354,16 +373,20 @@ prisma/
 ## 🐛 Troubleshooting
 
 ### "Access denied. Required roles: org_admin"
+
 **Problem**: User doesn't have the role
 **Solution**: Assign role via `/api/roles/assign-role`
 
 ### "User not found in request"
+
 **Problem**: JWT token missing or invalid
 **Solution**: Include `Authorization: Bearer {token}` header
 
 ### "@Roles() not working"
+
 **Problem**: Endpoint still accessible without role
 **Solution**: Ensure both guards are applied:
+
 ```typescript
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('org_admin')
@@ -371,8 +394,10 @@ prisma/
 ```
 
 ### "Port 3000 already in use"
+
 **Problem**: Another process using port 3000
 **Solution**: Kill process or use different port:
+
 ```bash
 PORT=3001 npm run dev
 ```
@@ -395,12 +420,14 @@ PORT=3001 npm run dev
 ## 📞 Support
 
 ### Documentation
+
 - 📖 RBAC_QUICK_REFERENCE.md - Quick answers
 - 🏗️ RBAC_ARCHITECTURE_DIAGRAM.md - Visual explanations
 - 📋 RBAC_IMPLEMENTATION.md - Technical details
 - ✅ RBAC_DEPLOYMENT_SUMMARY.md - Production guide
 
 ### Code
+
 - Check inline comments in `src/roles/`
 - Review examples in `prisma/seed-rbac.ts`
 - Study tests in `test/` directory
@@ -438,13 +465,13 @@ Phase 3:
 
 ## 📚 Quick Links
 
-| Need | File | Section |
-|------|------|---------|
-| Quick commands | RBAC_QUICK_REFERENCE.md | Key Commands |
-| How to test | RBAC_QUICK_REFERENCE.md | API Testing |
-| Technical details | RBAC_IMPLEMENTATION.md | All sections |
-| Deployment | RBAC_DEPLOYMENT_SUMMARY.md | Deployment Steps |
-| Visuals | RBAC_ARCHITECTURE_DIAGRAM.md | Request Flow |
+| Need              | File                         | Section          |
+| ----------------- | ---------------------------- | ---------------- |
+| Quick commands    | RBAC_QUICK_REFERENCE.md      | Key Commands     |
+| How to test       | RBAC_QUICK_REFERENCE.md      | API Testing      |
+| Technical details | RBAC_IMPLEMENTATION.md       | All sections     |
+| Deployment        | RBAC_DEPLOYMENT_SUMMARY.md   | Deployment Steps |
+| Visuals           | RBAC_ARCHITECTURE_DIAGRAM.md | Request Flow     |
 
 ---
 

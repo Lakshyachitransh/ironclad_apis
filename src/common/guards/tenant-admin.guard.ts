@@ -4,7 +4,7 @@ import { JwtUser } from '../../auth/types/jwt-user.interface';
 
 @Injectable()
 export class TenantAdminGuard implements CanActivate {
-  private readonly adminRoles = ['admin', 'owner', 'org_admin', 'super_admin'];
+  private readonly adminRoles = ['admin', 'owner', 'org_admin', 'super_admin', 'tenant_admin', 'platform_admin'];
 
   canActivate(context: ExecutionContext): boolean {
     const req = context.switchToHttp().getRequest();

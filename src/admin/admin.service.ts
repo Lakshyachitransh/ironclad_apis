@@ -6,6 +6,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
+import { EmailNotificationService } from '../common/services/email-notification.service';
 
 const execAsync = promisify(exec);
 
@@ -15,7 +16,8 @@ export class AdminService {
 
   constructor(
     private configService: ConfigService,
-    private prisma: PrismaService
+    private prisma: PrismaService,
+    private emailNotification: EmailNotificationService
   ) {}
 
   /**
@@ -214,8 +216,8 @@ export class AdminService {
 
       const userIds = allUsers.map(u => u.id);
       const whereClause = tenantId 
-        ? { tenantId, assignedTo: { in: userIds } }
-        : { assignedTo: { in: userIds } };
+        ? { tenantId, tenantUserId: { in: userIds } }
+        : { tenantUserId: { in: userIds } };
 
       // Get all course assignments with related data
       const courseAssignments = await this.prisma.courseAssignment.findMany({
@@ -267,11 +269,11 @@ export class AdminService {
 
       // Add course assignments
       courseAssignments.forEach(ca => {
-        if (!groupedByUser[ca.assignedTo]) {
-          const userData = userMap.get(ca.assignedTo);
+        if (!groupedByUser[ca.tenantUserId]) {
+          const userData = userMap.get(ca.tenantUserId);
           if (userData) {
-            groupedByUser[ca.assignedTo] = {
-              userId: ca.assignedTo,
+            groupedByUser[ca.tenantUserId] = {
+              userId: ca.tenantUserId,
               email: userData.email,
               displayName: userData.displayName,
               status: userData.status,
@@ -283,7 +285,7 @@ export class AdminService {
         }
 
         const userProgress = ca.userProgress[0];
-        groupedByUser[ca.assignedTo].courseAssignments.push({
+        groupedByUser[ca.tenantUserId].courseAssignments.push({
           courseAssignmentId: ca.id,
           tenantName: ca.tenant.name,
           tenantId: ca.tenant.id,
@@ -302,9 +304,9 @@ export class AdminService {
           } : null
         });
 
-        groupedByUser[ca.assignedTo].totalCoursesAssigned++;
+        groupedByUser[ca.tenantUserId].totalCoursesAssigned++;
         if (userProgress?.status === 'completed') {
-          groupedByUser[ca.assignedTo].coursesCompleted++;
+          groupedByUser[ca.tenantUserId].coursesCompleted++;
         }
       });
 
@@ -398,6 +400,25 @@ export class AdminService {
           tenantId,
           roles: ['tenant_admin']
         }
+      });
+
+      // Send welcome email asynchronously (don't wait for it)
+      this.emailNotification.sendWelcomeEmail(
+        user.email,
+        user.displayName || user.email.split('@')[0],
+        password,
+        tenant.name
+      ).then(async () => {
+        // Mark as sent in database
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: {
+            welcomeEmailSent: true,
+            welcomeEmailSentAt: new Date(),
+          },
+        });
+      }).catch(err => {
+        console.error('Failed to send welcome email:', err);
       });
 
       return {
@@ -522,6 +543,224 @@ export class AdminService {
       };
     } catch (error) {
       throw new BadRequestException(`Failed to fetch organized users: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get all predefined permissions with categories
+   * Used by platform_admin to view available permissions for role creation
+   */
+  async getPredefinedPermissions() {
+    try {
+      const permissions = await this.prisma.permission.findMany({
+        select: {
+          id: true,
+          code: true,
+          name: true
+        },
+        orderBy: {
+          code: 'asc'
+        }
+      });
+
+      if (!permissions || permissions.length === 0) {
+        return {
+          success: true,
+          totalPermissions: 0,
+          categories: {},
+          permissionsByCategory: {},
+          permissions: []
+        };
+      }
+
+      // Extract category from permission code (e.g., "courses" from "courses.create")
+      const permissionsWithCategory = permissions.map(perm => {
+        const category = perm.code.split('.')[0];
+        return {
+          id: perm.id,
+          code: perm.code,
+          name: perm.name,
+          category
+        };
+      });
+
+      // Group permissions by category
+      const grouped = permissionsWithCategory.reduce((acc, perm) => {
+        if (!acc[perm.category]) {
+          acc[perm.category] = [];
+        }
+        acc[perm.category].push({
+          id: perm.id,
+          code: perm.code,
+          name: perm.name,
+          category: perm.category
+        });
+        return acc;
+      }, {} as Record<string, any[]>);
+
+      // Get category counts
+      const categoryCounts = Object.entries(grouped).reduce((acc, [category, perms]) => {
+        acc[category] = perms.length;
+        return acc;
+      }, {} as Record<string, number>);
+
+      return {
+        success: true,
+        totalPermissions: permissions.length,
+        categories: categoryCounts,
+        permissionsByCategory: grouped,
+        permissions: permissionsWithCategory
+      };
+    } catch (error) {
+      throw new BadRequestException(`Failed to fetch predefined permissions: ${error.message}`);
+    }
+  }
+
+  /**
+   * Seed world-class permission system with 115 permissions and 5 roles
+   */
+  async seedWorldClassPermissions() {
+    try {
+      // Import permission constants
+      const { PERMISSIONS, PREDEFINED_ROLE_PERMISSIONS } = await import('../common/constants/permissions.constant');
+
+      console.log('🌱 Seeding world-class permission system...\n');
+
+      // 1. Create all permissions
+      console.log('📝 Creating permissions...');
+      const createdPermissions = new Map<string, string>();
+
+      for (const perm of PERMISSIONS) {
+        const created = await this.prisma.permission.upsert({
+          where: { code: perm.code },
+          update: {
+            name: perm.name,
+            description: perm.description,
+            resource: perm.resource,
+            action: perm.action,
+            category: perm.category,
+            isSystemDefined: true,
+          },
+          create: {
+            code: perm.code,
+            name: perm.name,
+            description: perm.description,
+            resource: perm.resource,
+            action: perm.action,
+            category: perm.category,
+            isSystemDefined: true,
+          },
+        });
+
+        createdPermissions.set(perm.code, created.id);
+      }
+
+      console.log(`✅ Created/Updated ${createdPermissions.size} permissions\n`);
+
+      // 2. Create predefined roles
+      console.log('🎭 Creating predefined roles...');
+      const createdRoles = new Map<string, string>();
+
+      for (const [roleName] of Object.entries(PREDEFINED_ROLE_PERMISSIONS)) {
+        const created = await this.prisma.role.upsert({
+          where: { code: roleName },
+          update: { isSystem: true },
+          create: {
+            code: roleName,
+            name: roleName.charAt(0).toUpperCase() + roleName.slice(1).replace(/_/g, ' '),
+            description: `System-defined ${roleName} role`,
+            category: 'system',
+            isSystem: true,
+          },
+        });
+
+        createdRoles.set(roleName, created.id);
+      }
+
+      console.log(`✅ Created/Updated ${createdRoles.size} roles\n`);
+
+      // 3. Assign permissions to roles
+      console.log('🔗 Assigning permissions to roles...');
+      let assignmentCount = 0;
+
+      for (const [roleName, permissionCodes] of Object.entries(PREDEFINED_ROLE_PERMISSIONS)) {
+        const roleId = createdRoles.get(roleName);
+
+        for (const permCode of permissionCodes) {
+          const permId = createdPermissions.get(permCode);
+
+          if (permId && roleId) {
+            try {
+              // Check if assignment already exists
+              const existing = await this.prisma.rolePermission.findFirst({
+                where: {
+                  roleId,
+                  permissionId: permId,
+                },
+              });
+
+              // Only create if doesn't exist
+              if (!existing) {
+                await this.prisma.rolePermission.create({
+                  data: {
+                    roleId,
+                    permissionId: permId,
+                  },
+                });
+              }
+
+              assignmentCount++;
+            } catch (err) {
+              console.warn(`Warning: Could not assign permission ${permCode} to role ${roleName}:`, err.message);
+            }
+          }
+        }
+      }
+
+      console.log(`✅ Assigned ${assignmentCount} role-permission relationships\n`);
+
+      // 4. Get permission stats by category
+      const permStats = await this.prisma.permission.groupBy({
+        by: ['category'],
+        _count: true,
+      });
+
+      const permissionsByCategory: Record<string, number> = {};
+      for (const stat of permStats) {
+        permissionsByCategory[stat.category] = stat._count;
+      }
+
+      // 5. Get role permission counts
+      const roleStats = await this.prisma.rolePermission.groupBy({
+        by: ['roleId'],
+        _count: true,
+      });
+
+      const rolePermissionCounts: Record<string, number> = {};
+      for (const stat of roleStats) {
+        const role = await this.prisma.role.findUnique({ where: { id: stat.roleId } });
+        if (role) {
+          rolePermissionCounts[role.code] = stat._count;
+        }
+      }
+
+      console.log('✨ Seeding completed successfully!\n');
+
+      return {
+        success: true,
+        message: 'World-class permission system seeded successfully',
+        summary: {
+          permissionsCreated: createdPermissions.size,
+          rolesCreated: createdRoles.size,
+          rolePermissionAssignments: assignmentCount,
+          categories: permStats.length,
+          permissionsByCategory,
+          rolePermissionCounts,
+        }
+      };
+    } catch (error) {
+      console.error('❌ Error during seeding:', error);
+      throw new BadRequestException(`Failed to seed permissions: ${error.message}`);
     }
   }
 }

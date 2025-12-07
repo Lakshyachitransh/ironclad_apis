@@ -23,8 +23,8 @@ import {
 import { LiveClassService } from './live-class.service';
 import { AttendanceService } from './services/attendance.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import { RolesGuard } from '../common/guards/roles.guard';
-import { Roles } from '../common/decorators/roles.decorator';
+import { PermissionGuard } from '../common/guards/permission.guard';
+import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { CreateLiveClassDto } from './dto/create-live-class.dto';
 import { TrackActivityDto, RecordLeaveDto, CalculateAttendanceDto } from './dto/attendance.dto';
 import type { Request as ExpressRequest } from 'express';
@@ -39,8 +39,8 @@ export class LiveClassController {
     private readonly attendanceService: AttendanceService,
   ) {}
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('training_manager', 'org_admin')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('admin.manage')
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ 
@@ -189,8 +189,8 @@ Only training_manager and org_admin roles can create live classes.`
     return this.liveClassService.listLiveClasses(actor.tenantId, status, limit, offset);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('training_manager', 'org_admin')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('admin.manage')
   @Post(':liveClassId/start')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ 
@@ -223,8 +223,8 @@ Only training_manager and org_admin roles can create live classes.`
     return this.liveClassService.startLiveClass(liveClassId, actor.id, actor.tenantId);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('training_manager', 'org_admin')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('admin.manage')
   @Post(':liveClassId/end')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ 
@@ -382,8 +382,8 @@ Constraints:
     return this.liveClassService.getActiveParticipants(liveClassId, actor.tenantId);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('training_manager', 'org_admin')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('admin.manage')
   @Post(':liveClassId/recording')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ 
@@ -539,8 +539,8 @@ Calculates:
     };
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('training_manager', 'instructor', 'org_admin')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('admin.manage')
   @Post(':liveClassId/attendance/calculate-all')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -581,8 +581,8 @@ Typically called when:
     };
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('training_manager', 'instructor', 'org_admin')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('admin.manage')
   @Get(':liveClassId/attendance/report')
   @ApiOperation({
     summary: 'Get attendance report for live class',

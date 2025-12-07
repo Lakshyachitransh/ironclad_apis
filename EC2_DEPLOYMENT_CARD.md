@@ -19,6 +19,7 @@ AWS Console → EC2 → Launch Instance
 ## 2️⃣ CONNECT VIA SSH
 
 **Windows (PowerShell):**
+
 ```powershell
 # First time only
 icacls "C:\path\key.pem" /inheritance:r /grant:r "$env:USERNAME:F"
@@ -28,6 +29,7 @@ ssh -i "C:\path\key.pem" ubuntu@<public-ip>
 ```
 
 **Linux/Mac:**
+
 ```bash
 chmod 400 ~/key.pem
 ssh -i ~/key.pem ubuntu@<public-ip>
@@ -52,6 +54,7 @@ nano /home/ubuntu/ironclad_apis/.env
 ```
 
 Update:
+
 ```env
 # AWS S3 Credentials
 AWS_REGION="us-east-1"
@@ -83,13 +86,13 @@ You should see Swagger API documentation! 🎉
 
 ## 📋 DEPLOYMENT FILES
 
-| File | Purpose | Time to Read |
-|------|---------|--------------|
-| `DEPLOYMENT_READY.md` | Overview & getting started | 5 min |
-| `QUICK_DEPLOY_EC2.md` | Fast deployment guide | 10 min |
-| `AWS_EC2_DEPLOYMENT_GUIDE.md` | Detailed step-by-step | 30 min |
-| `DEPLOYMENT_CHECKLIST.md` | Verification checklist | 20 min |
-| `deploy.sh` | Automated deployment script | 5 min (runs) |
+| File                          | Purpose                     | Time to Read |
+| ----------------------------- | --------------------------- | ------------ |
+| `DEPLOYMENT_READY.md`         | Overview & getting started  | 5 min        |
+| `QUICK_DEPLOY_EC2.md`         | Fast deployment guide       | 10 min       |
+| `AWS_EC2_DEPLOYMENT_GUIDE.md` | Detailed step-by-step       | 30 min       |
+| `DEPLOYMENT_CHECKLIST.md`     | Verification checklist      | 20 min       |
+| `deploy.sh`                   | Automated deployment script | 5 min (runs) |
 
 ---
 
@@ -135,28 +138,30 @@ curl http://<public-ip>/api/docs
 
 ## 💻 COMMON COMMANDS
 
-| Command | Purpose |
-|---------|---------|
-| `pm2 status` | Check app status |
-| `pm2 logs` | View application logs |
-| `pm2 restart ironclad-api` | Restart app |
-| `sudo systemctl status postgresql` | Check database |
-| `sudo systemctl restart nginx` | Restart web server |
-| `cd /home/ubuntu/ironclad_apis` | Go to app directory |
-| `git pull origin main` | Get latest code |
-| `npm run build` | Rebuild app |
-| `npx prisma migrate deploy` | Run migrations |
+| Command                            | Purpose               |
+| ---------------------------------- | --------------------- |
+| `pm2 status`                       | Check app status      |
+| `pm2 logs`                         | View application logs |
+| `pm2 restart ironclad-api`         | Restart app           |
+| `sudo systemctl status postgresql` | Check database        |
+| `sudo systemctl restart nginx`     | Restart web server    |
+| `cd /home/ubuntu/ironclad_apis`    | Go to app directory   |
+| `git pull origin main`             | Get latest code       |
+| `npm run build`                    | Rebuild app           |
+| `npx prisma migrate deploy`        | Run migrations        |
 
 ---
 
 ## 🆘 TROUBLESHOOTING
 
 **App won't start?**
+
 ```bash
 pm2 logs ironclad-api --lines 50
 ```
 
 **502 Bad Gateway?**
+
 ```bash
 pm2 status                           # Check if running
 curl http://localhost:3000          # Test directly
@@ -164,12 +169,14 @@ sudo systemctl restart nginx         # Restart proxy
 ```
 
 **Database error?**
+
 ```bash
 sudo systemctl status postgresql     # Check DB service
 psql -h localhost -U ironclad_user -d ironclad -c "SELECT 1"
 ```
 
 **Can't connect via SSH?**
+
 - Check security group allows port 22
 - Check key permissions: `chmod 400 key.pem`
 - Check IP is correct: `aws ec2 describe-instances`
@@ -193,6 +200,7 @@ psql -h localhost -U ironclad_user -d ironclad -c "SELECT 1"
 ## 📈 PERFORMANCE TUNING
 
 **Enable PM2 cluster mode:**
+
 ```bash
 pm2 delete ironclad-api
 pm2 start dist/main.js --name "ironclad-api" --instances max
@@ -200,6 +208,7 @@ pm2 save
 ```
 
 **Increase database performance:**
+
 ```bash
 sudo nano /etc/postgresql/14/main/postgresql.conf
 # Increase: shared_buffers = 512MB
@@ -212,16 +221,19 @@ sudo systemctl restart postgresql
 ## 💾 BACKUP DATABASE
 
 **Manual backup:**
+
 ```bash
 pg_dump -U ironclad_user -d ironclad > ~/backup_$(date +%Y%m%d).sql
 ```
 
 **Restore from backup:**
+
 ```bash
 psql -U ironclad_user -d ironclad < ~/backup_*.sql
 ```
 
 **Automated backups (daily at 2 AM):**
+
 ```bash
 crontab -e
 # Add: 0 2 * * * pg_dump -U ironclad_user -d ironclad > /home/ubuntu/backups/ironclad_$(date +\%Y\%m\%d).sql
@@ -254,12 +266,12 @@ pm2 restart ironclad-api
 
 ## 💰 ESTIMATED COSTS
 
-| Service | Free Tier | Paid (t3.medium) |
-|---------|-----------|-----------------|
-| EC2 | 1 x micro (1 year) | ~$30/month |
-| RDS | 1 x micro (1 year) | ~$30/month |
-| Storage | 20GB free | ~$5/month |
-| **Total** | **Free** | **~$65/month** |
+| Service   | Free Tier          | Paid (t3.medium) |
+| --------- | ------------------ | ---------------- |
+| EC2       | 1 x micro (1 year) | ~$30/month       |
+| RDS       | 1 x micro (1 year) | ~$30/month       |
+| Storage   | 20GB free          | ~$5/month        |
+| **Total** | **Free**           | **~$65/month**   |
 
 ---
 

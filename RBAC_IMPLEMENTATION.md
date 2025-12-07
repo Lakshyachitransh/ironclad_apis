@@ -3,11 +3,13 @@
 ## What Was Done
 
 ### 1. ✅ Refactored AdminController to Use Proper RBAC
+
 - **Removed**: `OrgAdminGuard` (custom guard)
 - **Added**: `RolesGuard` + `@Roles('org_admin')` decorator on all endpoints
 - **Benefit**: Consistent with application's established RBAC framework
 
 **Changed Endpoints:**
+
 ```
 @Roles('org_admin')
 ├── POST /admin/database/update-config
@@ -24,6 +26,7 @@
 **Created File:** `prisma/seed-rbac.ts`
 
 **Permissions Created (19 total):**
+
 ```
 Admin Permissions:
 - manage_database
@@ -56,6 +59,7 @@ View Permissions:
 ```
 
 **Roles Created (6 total):**
+
 ```
 1. org_admin (Organization Admin)
    └─ Permissions: manage_database, manage_tenants, view_all_users, create_tenant_admin, manage_roles
@@ -79,17 +83,20 @@ View Permissions:
 ### 3. ✅ Created Database Cleanup Script
 
 **Created File:** `prisma/clean-rbac.ts`
+
 - Safely deletes RolePermission records first
 - Then deletes Permission records
 - Finally deletes Role records
 - Respects foreign key constraints
 
 **Created File:** `prisma/clean-rbac.sql`
+
 - SQL alternative for manual cleanup if needed
 
 ### 4. ✅ Added npm Scripts
 
 Updated `package.json` with new scripts:
+
 ```json
 "prisma:generate": "prisma generate",
 "rbac:clean": "prisma db execute --stdin < prisma/clean-rbac.sql",
@@ -100,16 +107,19 @@ Updated `package.json` with new scripts:
 ## How to Use
 
 ### Clean RBAC Tables
+
 ```bash
 npm run rbac:clean
 ```
 
 ### Seed RBAC Data
+
 ```bash
 npm run rbac:seed
 ```
 
 ### Clean and Reset (Full Reset)
+
 ```bash
 npm run rbac:reset
 ```
@@ -122,7 +132,7 @@ npm run rbac:reset
 4. **Permission Check** → Compares user's roles with required roles
    - Combines `user.roles` (global, like org_admin)
    - And `user.tenantRoles` (tenant-scoped roles from UserTenant)
-5. **Decision** → 
+5. **Decision** →
    - ✅ If user has matching role → Allow access
    - ❌ If no match → Throw `ForbiddenException` (403)
 
@@ -142,11 +152,13 @@ UserTenant (userId, tenantId, roles[])
 ## Endpoints Now Using RolesGuard
 
 ### AdminController (All 7 Endpoints)
+
 - ✅ Database management endpoints
 - ✅ User viewing endpoints
 - ✅ Tenant admin creation endpoint
 
 ### Other Controllers Already Using RolesGuard
+
 - ✅ CoursesController (requires training_manager, org_admin, or learner)
 - ✅ LiveClassController (requires training_manager or org_admin)
 - ✅ Other endpoints as configured
@@ -162,6 +174,7 @@ UserTenant (userId, tenantId, roles[])
 ## Next Steps
 
 1. **Populate Initial Data**:
+
    ```bash
    npm run rbac:seed
    ```
@@ -172,6 +185,7 @@ UserTenant (userId, tenantId, roles[])
    - Verify 403 error for non-org_admin users
 
 3. **Assign Roles to Users**:
+
    ```bash
    POST /api/roles/assign-role
    {
@@ -188,17 +202,18 @@ UserTenant (userId, tenantId, roles[])
 
 ## Files Modified/Created
 
-| File | Action | Purpose |
-|------|--------|---------|
+| File                            | Action   | Purpose                            |
+| ------------------------------- | -------- | ---------------------------------- |
 | `src/admin/admin.controller.ts` | Modified | Updated to use RolesGuard + @Roles |
-| `prisma/seed-rbac.ts` | Created | Seeds 6 roles with 19 permissions |
-| `prisma/clean-rbac.ts` | Created | Cleans RBAC tables safely |
-| `prisma/clean-rbac.sql` | Created | SQL alternative for cleanup |
-| `package.json` | Modified | Added rbac npm scripts |
+| `prisma/seed-rbac.ts`           | Created  | Seeds 6 roles with 19 permissions  |
+| `prisma/clean-rbac.ts`          | Created  | Cleans RBAC tables safely          |
+| `prisma/clean-rbac.sql`         | Created  | SQL alternative for cleanup        |
+| `package.json`                  | Modified | Added rbac npm scripts             |
 
 ## Status
 
 ✅ **COMPLETE** - All endpoints now use proper RBAC framework
+
 - AdminController refactored
 - Seed and cleanup scripts created
 - npm scripts added for easy management

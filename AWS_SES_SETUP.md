@@ -1,9 +1,11 @@
 # AWS SES SMTP Credentials Setup Guide
 
 ## ⚠️ Issue
+
 You're getting "Invalid login: 535 Authentication Credentials Invalid"
 
 ## 🔧 Root Cause
+
 AWS Access Key ID and AWS Secret Access Key are **NOT** SES SMTP credentials. SES requires separate SMTP credentials.
 
 ## ✅ Solution
@@ -58,17 +60,19 @@ APP_LOGIN_URL=https://app.example.com/login
 ## 🧪 Test Connection
 
 The email service will log:
+
 - ✅ "Email transporter verified successfully" = Working
 - ❌ "Email transporter verification failed" = Issue exists
 
 ## 🔗 AWS SES Documentation
+
 https://docs.aws.amazon.com/ses/latest/dg/send-email-smtp.html
 
 ## 📝 Troubleshooting
 
-| Error | Cause | Solution |
-|-------|-------|----------|
-| Invalid login: 535 | Wrong SMTP credentials | Generate new SMTP credentials from SES console |
-| Email not sent | Sender email not verified | Verify email in SES verified identities |
-| Rate limit | Sending too fast or sandbox limit | Request production access in SES |
-| Permission denied | IAM policy missing | Add ses:SendEmail permission to IAM user |
+| Error              | Cause                             | Solution                                       |
+| ------------------ | --------------------------------- | ---------------------------------------------- |
+| Invalid login: 535 | Wrong SMTP credentials            | Generate new SMTP credentials from SES console |
+| Email not sent     | Sender email not verified         | Verify email in SES verified identities        |
+| Rate limit         | Sending too fast or sandbox limit | Request production access in SES               |
+| Permission denied  | IAM policy missing                | Add ses:SendEmail permission to IAM user       |

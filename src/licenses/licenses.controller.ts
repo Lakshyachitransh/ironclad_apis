@@ -2,8 +2,8 @@ import { Controller, Get, Post, Patch, Body, Param, UseGuards, Request, BadReque
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiBody } from '@nestjs/swagger';
 import { LicensesService } from './licenses.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import { RolesGuard } from '../common/guards/roles.guard';
-import { Roles } from '../common/decorators/roles.decorator';
+import { PermissionGuard } from '../common/guards/permission.guard';
+import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { CreateLicenseDto, UpdateLicenseDto, AssignLicenseUserDto, RevokeLicenseUserDto, CreateApplicationDto, UpdateApplicationDto, CreateApplicationFeatureDto } from './dto/create-license.dto';
 
 @ApiTags('licenses')
@@ -16,8 +16,8 @@ export class LicensesController {
   // Application Management Endpoints (Org Admin Only)
   // ============================================================================
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('org_admin')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('admin.manage')
   @Post('applications')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ 
@@ -35,8 +35,8 @@ export class LicensesController {
     return this.licensesService.createApplication(dto);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('org_admin')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('admin.manage')
   @Get('applications')
   @ApiOperation({ 
     summary: 'List all applications',
@@ -48,8 +48,8 @@ export class LicensesController {
     return this.licensesService.getApplications();
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('org_admin')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('admin.manage')
   @Get('applications/:applicationId')
   @ApiOperation({ 
     summary: 'Get application details',
@@ -66,8 +66,8 @@ export class LicensesController {
     return this.licensesService.getApplication(applicationId);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('org_admin')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('admin.manage')
   @Patch('applications/:applicationId')
   @ApiOperation({ 
     summary: 'Update application',
@@ -89,8 +89,8 @@ export class LicensesController {
   // Application Features Endpoints (Org Admin Only)
   // ============================================================================
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('org_admin')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('admin.manage')
   @Post('applications/:applicationId/features')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ 
@@ -110,8 +110,8 @@ export class LicensesController {
     return this.licensesService.addFeature(applicationId, dto);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('org_admin')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('admin.manage')
   @Get('applications/:applicationId/features')
   @ApiOperation({ 
     summary: 'List application features',
@@ -130,8 +130,8 @@ export class LicensesController {
   // Tenant License Management Endpoints (Org Admin / Training Manager)
   // ============================================================================
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('org_admin', 'training_manager')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('admin.manage')
   @Post('tenants/:tenantId/licenses')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ 
@@ -158,8 +158,8 @@ Only org admins and training managers can create licenses for their tenant.`
     return this.licensesService.createLicense(tenantId, dto, req.user.id);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('org_admin', 'training_manager')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('admin.manage')
   @Get('tenants/:tenantId/licenses')
   @ApiOperation({ 
     summary: 'List tenant licenses',
@@ -180,8 +180,8 @@ Only org admins and training managers can create licenses for their tenant.`
     return this.licensesService.getTenantLicenses(tenantId);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('org_admin', 'training_manager')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('admin.manage')
   @Get('tenants/:tenantId/licenses/:licenseId')
   @ApiOperation({ 
     summary: 'Get license details',
@@ -204,8 +204,8 @@ Only org admins and training managers can create licenses for their tenant.`
     return this.licensesService.getLicense(tenantId, licenseId);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('org_admin', 'training_manager')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('admin.manage')
   @Patch('tenants/:tenantId/licenses/:licenseId')
   @ApiOperation({ 
     summary: 'Update license',
@@ -230,8 +230,8 @@ Only org admins and training managers can create licenses for their tenant.`
     return this.licensesService.updateLicense(tenantId, licenseId, dto, req.user.id);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('org_admin', 'training_manager')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('admin.manage')
   @Post('tenants/:tenantId/licenses/:licenseId/renew')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ 
@@ -269,8 +269,8 @@ Only org admins and training managers can create licenses for their tenant.`
     return this.licensesService.renewLicense(tenantId, licenseId, newEndDate, req.user.id);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('org_admin', 'training_manager')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('admin.manage')
   @Post('tenants/:tenantId/licenses/:licenseId/suspend')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ 
@@ -310,8 +310,8 @@ Only org admins and training managers can create licenses for their tenant.`
   // License User Assignment Endpoints (Org Admin / Training Manager)
   // ============================================================================
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('org_admin', 'training_manager')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('admin.manage')
   @Post('tenants/:tenantId/licenses/:licenseId/assign-user')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ 
@@ -340,8 +340,8 @@ This increases the current seat count and grants the user access to the applicat
     return this.licensesService.assignLicenseToUser(tenantId, licenseId, dto, req.user.id);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('org_admin', 'training_manager')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('admin.manage')
   @Post('tenants/:tenantId/licenses/:licenseId/revoke-user')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ 
@@ -369,8 +369,8 @@ This frees up a seat and revokes the user's access to the application.`
     return this.licensesService.revokeLicenseFromUser(tenantId, licenseId, dto, req.user.id);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('org_admin', 'training_manager', 'instructor')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('admin.manage')
   @Get('tenants/:tenantId/licenses/:licenseId/users')
   @ApiOperation({ 
     summary: 'List users assigned to license',
@@ -393,8 +393,8 @@ This frees up a seat and revokes the user's access to the application.`
     return this.licensesService.getLicenseUsers(tenantId, licenseId);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('org_admin', 'training_manager', 'instructor', 'learner')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('admin.manage')
   @Get('my-licenses')
   @ApiOperation({ 
     summary: 'Get current user licenses',
@@ -412,8 +412,8 @@ This frees up a seat and revokes the user's access to the application.`
   // License Analytics and Reporting Endpoints
   // ============================================================================
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('org_admin', 'training_manager')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('admin.manage')
   @Get('tenants/:tenantId/stats')
   @ApiOperation({ 
     summary: 'Get tenant license statistics',
@@ -434,8 +434,8 @@ This frees up a seat and revokes the user's access to the application.`
     return this.licensesService.getLicenseUsageStats(tenantId);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('org_admin', 'training_manager')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('admin.manage')
   @Get('tenants/:tenantId/audit-log')
   @ApiOperation({ 
     summary: 'Get license audit log',

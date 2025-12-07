@@ -124,13 +124,22 @@ async function main() {
 
   // Create all permissions and assign to platform_admin
   for (const perm of ALL_PERMISSIONS) {
+    // Extract resource and action from code (format: resource.action)
+    const parts = perm.code.split('.');
+    const resource = parts[0];
+    const action = parts.slice(1).join('.');
+    const category = resource; // Use resource as category
+
     // Upsert permission
     const permission = await prisma.permission.upsert({
       where: { code: perm.code },
       update: {},
       create: {
         code: perm.code,
-        name: perm.name
+        name: perm.name,
+        resource,
+        action,
+        category
       }
     });
 

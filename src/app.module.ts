@@ -11,12 +11,24 @@ import { CoursesModule } from './courses/courses.module';
 import { LiveClassModule } from './live-class/live-class.module';
 import { AdminModule } from './admin/admin.module';
 import { LicensesModule } from './licenses/licenses.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
-  imports: [AuthModule, UsersModule, TenantsModule, RolesModule, CoursesModule, LiveClassModule, AdminModule, LicensesModule, ConfigModule.forRoot({
-      isGlobal: true,   // makes ConfigService available everywhere
-      envFilePath: '.env', // optional: path(s) to env files
-    })],
+  imports: [
+    ScheduleModule.forRoot(),
+    AuthModule,
+    UsersModule,
+    TenantsModule,
+    RolesModule,
+    CoursesModule,
+    LiveClassModule,
+    AdminModule,
+    LicensesModule,
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: '.env',
+    })
+  ],
   controllers: [AppController],
   providers: [AppService, PrismaService],
   exports: [PrismaService],

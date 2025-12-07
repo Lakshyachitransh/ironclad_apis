@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, NotFoundException, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, InternalServerErrorException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { S3Service } from '../common/services/s3.service';
 import { EmailService } from '../common/services/email.service';
@@ -301,7 +301,7 @@ export class CoursesService {
         const existing = await this.prisma.courseAssignment.findFirst({
           where: {
             courseId,
-            assignedTo: userId,
+            tenantUserId: userId,
             tenantId
           }
         });
@@ -319,7 +319,7 @@ export class CoursesService {
           data: {
             tenantId,
             courseId,
-            assignedTo: userId,
+            tenantUserId: userId,
             assignedBy,
             dueDate: dueDate || null,
             status: 'assigned'
@@ -331,6 +331,7 @@ export class CoursesService {
           data: {
             tenantId,
             userId,
+            tenantUserId: userId,
             courseId,
             courseAssignmentId: assignment.id,
             lessonsTotal,
@@ -581,8 +582,8 @@ export class CoursesService {
     // Update or create lesson progress
     let lessonProgress = await this.prisma.lessonProgress.findUnique({
       where: {
-        userId_lessonId: {
-          userId,
+        tenantUserId_lessonId: {
+          tenantUserId: userId,
           lessonId
         }
       }
@@ -593,6 +594,7 @@ export class CoursesService {
         data: {
           tenantId,
           userId,
+          tenantUserId: userId,
           lessonId,
           userProgressId: userProgress.id,
           watchedDuration,
@@ -741,6 +743,101 @@ export class CoursesService {
       saved: true,
       addedAt: new Date().toISOString(),
     };
+  }
+
+  /**
+   * Save generated quiz from AI video processing
+   * Stores quiz and questions to database after AI generation
+   */
+  async saveGeneratedQuiz(lessonId: string, courseId: string, quizData: any, tenantId: string): Promise<any> {
+    // Verify lesson exists and belongs to course and tenant
+    const lesson = await this.prisma.lesson.findUnique({
+      where: { id: lessonId },
+      include: {
+        module: {
+          include: {
+            course: {
+              select: { id: true, tenantId: true }
+            }
+          }
+        }
+      }
+    });
+
+    if (!lesson) {
+      throw new NotFoundException('Lesson not found');
+    }
+
+    if (lesson.module.course.id !== courseId) {
+      throw new BadRequestException('Lesson does not belong to this course');
+    }
+
+    if (lesson.module.course.tenantId !== tenantId) {
+      throw new ForbiddenException('Access denied to this course');
+    }
+
+    try {
+      // Create quiz record
+      const quiz = await this.prisma.quiz.create({
+        data: {
+          title: quizData.topic || `Quiz: ${quizData.topic}`,
+          description: `AI-generated quiz from video`,
+          lessonId,
+          instructions: `This quiz was automatically generated from the video content`,
+          passingScore: 70,
+          attemptsAllowed: 3,
+          timeLimit: 1800, // 30 minutes
+          shuffleQuestions: true,
+          status: 'draft',
+        },
+      });
+
+      // Create quiz questions
+      if (quizData.questions && Array.isArray(quizData.questions)) {
+        for (let i = 0; i < quizData.questions.length; i++) {
+          const question = quizData.questions[i];
+          
+          const createdQuestion = await this.prisma.quizQuestion.create({
+            data: {
+              quizId: quiz.id,
+              questionText: question.questionText || question.question || '',
+              type: 'multiple_choice',
+              points: question.difficulty === 'hard' ? 3 : question.difficulty === 'medium' ? 2 : 1,
+              displayOrder: i,
+              explanation: question.explanation || '',
+            },
+          });
+
+          // Create quiz options (answers)
+          if (question.options && Array.isArray(question.options)) {
+            for (let j = 0; j < question.options.length; j++) {
+              const option = question.options[j];
+              const isCorrect = j === question.correctOption;
+              
+              await this.prisma.quizOption.create({
+                data: {
+                  questionId: createdQuestion.id,
+                  optionText: option,
+                  isCorrect,
+                  displayOrder: j,
+                },
+              });
+            }
+          }
+        }
+      }
+
+      return {
+        quizId: quiz.id,
+        totalQuestions: quizData.questions?.length || 0,
+        saved: true,
+        message: 'Quiz generated and saved successfully',
+        topic: quizData.topic,
+      };
+    } catch (error) {
+      console.error(`Error saving generated quiz: ${error.message}`);
+      throw new BadRequestException('Failed to save generated quiz');
+    }
   }
 
   /**

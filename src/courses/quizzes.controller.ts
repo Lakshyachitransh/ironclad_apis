@@ -11,8 +11,8 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { RolesGuard } from '../common/guards/roles.guard';
-import { Roles } from '../common/decorators/roles.decorator';
+import { PermissionGuard } from '../common/guards/permission.guard';
+import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { QuizzesService } from './quizzes.service';
 import {
   CreateQuizDto,
@@ -26,14 +26,14 @@ import {
 
 @ApiTags('quizzes')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, PermissionGuard)
 @Controller('lessons/:lessonId/quizzes')
 export class QuizzesController {
   constructor(private quizzesService: QuizzesService) {}
 
   // Quiz Management Endpoints
   @Post()
-  @Roles('training_manager', 'org_admin')
+  @RequirePermission('courses.publish')
   @ApiOperation({ summary: 'Create a new quiz for a lesson' })
   async createQuiz(
     @Param('lessonId') lessonId: string,
@@ -43,21 +43,21 @@ export class QuizzesController {
   }
 
   @Get()
-  @Roles('training_manager', 'org_admin', 'learner')
+  @RequirePermission('courses.read')
   @ApiOperation({ summary: 'Get all quizzes for a lesson' })
   async getQuizzes(@Param('lessonId') lessonId: string) {
     return this.quizzesService.getQuizzes(lessonId);
   }
 
   @Get(':quizId')
-  @Roles('training_manager', 'org_admin', 'learner')
+  @RequirePermission('courses.read')
   @ApiOperation({ summary: 'Get quiz details with questions and options' })
   async getQuiz(@Param('quizId') quizId: string) {
     return this.quizzesService.getQuiz(quizId);
   }
 
   @Put(':quizId')
-  @Roles('training_manager', 'org_admin')
+  @RequirePermission('courses.update')
   @ApiOperation({ summary: 'Update quiz settings' })
   async updateQuiz(
     @Param('quizId') quizId: string,
@@ -67,14 +67,14 @@ export class QuizzesController {
   }
 
   @Post(':quizId/publish')
-  @Roles('training_manager', 'org_admin')
+  @RequirePermission('courses.publish')
   @ApiOperation({ summary: 'Publish quiz (must have questions)' })
   async publishQuiz(@Param('quizId') quizId: string) {
     return this.quizzesService.publishQuiz(quizId);
   }
 
   @Delete(':quizId')
-  @Roles('training_manager', 'org_admin')
+  @RequirePermission('courses.delete')
   @ApiOperation({ summary: 'Delete a quiz' })
   async deleteQuiz(@Param('quizId') quizId: string) {
     return this.quizzesService.deleteQuiz(quizId);
@@ -82,7 +82,7 @@ export class QuizzesController {
 
   // Question Management Endpoints
   @Post(':quizId/questions')
-  @Roles('training_manager', 'org_admin')
+  @RequirePermission('courses.publish')
   @ApiOperation({ summary: 'Add a question to the quiz' })
   async addQuestion(
     @Param('quizId') quizId: string,
@@ -92,7 +92,7 @@ export class QuizzesController {
   }
 
   @Put(':quizId/questions/:questionId')
-  @Roles('training_manager', 'org_admin')
+  @RequirePermission('courses.update')
   @ApiOperation({ summary: 'Update a question' })
   async updateQuestion(
     @Param('questionId') questionId: string,
@@ -102,7 +102,7 @@ export class QuizzesController {
   }
 
   @Delete(':quizId/questions/:questionId')
-  @Roles('training_manager', 'org_admin')
+  @RequirePermission('courses.delete')
   @ApiOperation({ summary: 'Delete a question' })
   async deleteQuestion(@Param('questionId') questionId: string) {
     return this.quizzesService.deleteQuestion(questionId);
@@ -110,7 +110,7 @@ export class QuizzesController {
 
   // Option Management Endpoints
   @Post(':quizId/questions/:questionId/options')
-  @Roles('training_manager', 'org_admin')
+  @RequirePermission('courses.publish')
   @ApiOperation({ summary: 'Add an option to a question' })
   async addOption(
     @Param('questionId') questionId: string,
@@ -120,7 +120,7 @@ export class QuizzesController {
   }
 
   @Put(':quizId/questions/:questionId/options/:optionId')
-  @Roles('training_manager', 'org_admin')
+  @RequirePermission('courses.update')
   @ApiOperation({ summary: 'Update an option' })
   async updateOption(
     @Param('optionId') optionId: string,
@@ -130,7 +130,7 @@ export class QuizzesController {
   }
 
   @Delete(':quizId/questions/:questionId/options/:optionId')
-  @Roles('training_manager', 'org_admin')
+  @RequirePermission('courses.delete')
   @ApiOperation({ summary: 'Delete an option' })
   async deleteOption(@Param('optionId') optionId: string) {
     return this.quizzesService.deleteOption(optionId);
@@ -138,7 +138,7 @@ export class QuizzesController {
 
   // Quiz Attempt Endpoints
   @Post(':quizId/start')
-  @Roles('learner')
+  @RequirePermission('courses.read')
   @ApiOperation({ summary: 'Start a quiz attempt' })
   async startAttempt(
     @Param('quizId') quizId: string,
@@ -148,14 +148,14 @@ export class QuizzesController {
   }
 
   @Get(':quizId/attempts/:attemptId')
-  @Roles('learner', 'training_manager', 'org_admin')
+  @RequirePermission('courses.read')
   @ApiOperation({ summary: 'Get attempt details' })
   async getAttempt(@Param('attemptId') attemptId: string) {
     return this.quizzesService.getAttempt(attemptId);
   }
 
   @Post(':quizId/attempts/:attemptId/answers')
-  @Roles('learner')
+  @RequirePermission('courses.read')
   @ApiOperation({ summary: 'Submit an answer to a question' })
   async submitAnswer(
     @Param('attemptId') attemptId: string,
@@ -169,14 +169,14 @@ export class QuizzesController {
   }
 
   @Post(':quizId/attempts/:attemptId/submit')
-  @Roles('learner')
+  @RequirePermission('courses.read')
   @ApiOperation({ summary: 'Submit the entire quiz (calculate score)' })
   async submitQuiz(@Param('attemptId') attemptId: string) {
     return this.quizzesService.submitQuiz(attemptId);
   }
 
   @Get(':quizId/my-attempts')
-  @Roles('learner')
+  @RequirePermission('courses.read')
   @ApiOperation({ summary: 'Get my quiz attempts' })
   async getMyAttempts(
     @Param('quizId') quizId: string,
@@ -186,7 +186,7 @@ export class QuizzesController {
   }
 
   @Get(':quizId/results')
-  @Roles('training_manager', 'org_admin')
+  @RequirePermission('courses.read')
   @ApiOperation({ summary: 'Get all quiz results' })
   async getQuizResults(@Param('quizId') quizId: string) {
     return this.quizzesService.getQuizResults(quizId);

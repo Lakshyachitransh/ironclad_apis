@@ -5,6 +5,7 @@
 ### **Step 1: Get Your SSH Key Content**
 
 **Windows PowerShell:**
+
 ```powershell
 # Find your .pem file (if you have it)
 Get-ChildItem "$env:USERPROFILE\Downloads\*.pem"
@@ -150,6 +151,7 @@ SETUP_EOF
 ### **Test Deployment:**
 
 Make a small change and push:
+
 ```bash
 cd C:\Users\DELL\OneDrive\Desktop\ironclad_apis\ironclad_apis
 
@@ -168,6 +170,7 @@ git push origin main
 ### **Verify Application:**
 
 After deployment completes, visit:
+
 ```
 http://13.53.151.86/api/docs
 ```
@@ -177,6 +180,7 @@ http://13.53.151.86/api/docs
 ## 🎯 From Now On
 
 Every time you push to `main`:
+
 1. GitHub Actions automatically triggers
 2. Pulls your code to EC2
 3. Builds the application
@@ -191,6 +195,7 @@ No manual deployment needed! 🚀
 ## 🆘 Troubleshooting
 
 ### **Check Secrets are Added**
+
 ```
 GitHub → Repository Settings → Secrets and variables → Actions
 Should show:
@@ -199,6 +204,7 @@ Should show:
 ```
 
 ### **SSH Connection Error?**
+
 ```powershell
 # Test if .pem key is valid
 ssh -i "C:\path\to\key.pem" ubuntu@13.53.151.86
@@ -207,6 +213,7 @@ ssh -i "C:\path\to\key.pem" ubuntu@13.53.151.86
 ```
 
 ### **Deployment Failed?**
+
 1. Check GitHub Actions logs for error
 2. SSH to EC2 and check: `pm2 logs ironclad-api`
 3. Verify secrets are correct
@@ -215,13 +222,13 @@ ssh -i "C:\path\to\key.pem" ubuntu@13.53.151.86
 
 ## 📊 Quick Reference
 
-| Command | Purpose |
-|---------|---------|
-| Push to main | Automatically triggers deployment |
-| Check status | GitHub → Actions tab |
-| View logs | GitHub Actions workflow logs |
-| View app logs | `pm2 logs ironclad-api` |
-| Manual redeploy | Actions → Run workflow button |
+| Command         | Purpose                           |
+| --------------- | --------------------------------- |
+| Push to main    | Automatically triggers deployment |
+| Check status    | GitHub → Actions tab              |
+| View logs       | GitHub Actions workflow logs      |
+| View app logs   | `pm2 logs ironclad-api`           |
+| Manual redeploy | Actions → Run workflow button     |
 
 ---
 

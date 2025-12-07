@@ -11,13 +11,13 @@ export class AttendanceService {
    */
   async trackActivity(
     liveClassId: string,
-    userId: string,
+    tenantUserId: string,
     tenantId: string,
   ): Promise<void> {
     // Verify participant exists in this live class
     const participant = await this.prisma.liveClassParticipant.findUnique({
       where: {
-        liveClassId_userId: { liveClassId, userId },
+        liveClassId_tenantUserId: { liveClassId, tenantUserId },
       },
       include: { liveClass: true },
     });
@@ -40,7 +40,7 @@ export class AttendanceService {
    */
   async recordParticipantLeave(
     liveClassId: string,
-    userId: string,
+    tenantUserId: string,
     tenantId: string,
   ): Promise<{
     activeDurationSeconds: number;
@@ -50,7 +50,7 @@ export class AttendanceService {
     // Get the live class and participant details
     const liveClass = await this.prisma.liveClass.findUnique({
       where: { id: liveClassId },
-      include: { participants: { where: { userId } } },
+      include: { participants: { where: { tenantUserId } } },
     });
 
     if (!liveClass) {
@@ -97,7 +97,7 @@ export class AttendanceService {
     // Update participant record
     await this.prisma.liveClassParticipant.update({
       where: {
-        liveClassId_userId: { liveClassId, userId },
+        liveClassId_tenantUserId: { liveClassId, tenantUserId },
       },
       data: {
         leftAt: participantLeaveTime,
@@ -235,7 +235,7 @@ export class AttendanceService {
         averageAttendance,
       },
       participants: liveClass.participants.map((p) => ({
-        userId: p.userId,
+        tenantUserId: p.tenantUserId,
         joinedAt: p.joinedAt,
         leftAt: p.leftAt,
         role: p.role,
@@ -253,12 +253,12 @@ export class AttendanceService {
    */
   async getParticipantAttendance(
     liveClassId: string,
-    userId: string,
+    tenantUserId: string,
     tenantId: string,
   ): Promise<any> {
     const participant = await this.prisma.liveClassParticipant.findUnique({
       where: {
-        liveClassId_userId: { liveClassId, userId },
+        liveClassId_tenantUserId: { liveClassId, tenantUserId },
       },
       include: { liveClass: true },
     });
@@ -280,7 +280,7 @@ export class AttendanceService {
     return {
       liveClassId,
       liveClassTitle: participant.liveClass.title,
-      userId,
+      tenantUserId,
       role: participant.role,
       joinedAt: participant.joinedAt,
       leftAt: participant.leftAt,
@@ -302,7 +302,7 @@ export class AttendanceService {
    * Get training progress for user across all live classes in a course
    */
   async getTrainingProgress(
-    userId: string,
+    tenantUserId: string,
     courseId: string,
     tenantId: string,
   ): Promise<any> {
@@ -315,7 +315,7 @@ export class AttendanceService {
       },
       include: {
         participants: {
-          where: { userId },
+          where: { tenantUserId },
         },
       },
       orderBy: { scheduledAt: 'asc' },
@@ -348,7 +348,7 @@ export class AttendanceService {
         : 0;
 
     return {
-      userId,
+      tenantUserId,
       courseId,
       summary: {
         totalSessions,

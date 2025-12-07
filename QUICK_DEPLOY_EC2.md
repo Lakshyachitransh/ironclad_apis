@@ -3,13 +3,16 @@
 ## TL;DR - Fast Deployment
 
 ### 1. Launch EC2 Instance
+
 Go to AWS Console → EC2 → Launch Instance
+
 - **AMI**: Ubuntu Server 22.04 LTS
 - **Type**: t3.medium
 - **Key Pair**: Download .pem file
 - **Security Group**: Add ports 22, 80, 443, 3000
 
 ### 2. Connect & Deploy
+
 ```bash
 # From your machine (Windows PowerShell / Linux / Mac)
 ssh -i "path/to/key.pem" ubuntu@<your-ec2-ip>
@@ -22,6 +25,7 @@ chmod +x deploy.sh
 ```
 
 ### 3. Update Configuration
+
 ```bash
 # Edit .env file with AWS credentials
 nano /home/ubuntu/ironclad_apis/.env
@@ -32,6 +36,7 @@ pm2 restart ironclad-api
 ```
 
 ### 4. Access Your API
+
 ```
 Swagger Docs: http://<your-ec2-ip>/api/docs
 API Base: http://<your-ec2-ip>/api
@@ -42,6 +47,7 @@ API Base: http://<your-ec2-ip>/api
 ## Step-by-Step (With Details)
 
 ### Prerequisites
+
 - AWS Account
 - SSH client (PuTTY, WSL, or native SSH)
 - .pem key file
@@ -49,6 +55,7 @@ API Base: http://<your-ec2-ip>/api
 ### Step 1: Create EC2 Instance
 
 **Via AWS Console:**
+
 1. Go to EC2 Dashboard
 2. Click "Launch Instance"
 3. Choose **Ubuntu Server 22.04 LTS** (free tier eligible)
@@ -66,6 +73,7 @@ API Base: http://<your-ec2-ip>/api
 ### Step 2: Connect via SSH
 
 **Windows PowerShell:**
+
 ```powershell
 # Set key permissions (one time)
 icacls "C:\path\to\key.pem" /inheritance:r /grant:r "$env:USERNAME:F"
@@ -75,6 +83,7 @@ ssh -i "C:\path\to\key.pem" ubuntu@<your-ec2-ip>
 ```
 
 **Linux/Mac:**
+
 ```bash
 chmod 400 ~/path/to/key.pem
 ssh -i ~/path/to/key.pem ubuntu@<your-ec2-ip>
@@ -116,6 +125,7 @@ nano /home/ubuntu/ironclad_apis/.env
 ```
 
 Update these fields:
+
 ```env
 # AWS S3 (get from AWS IAM)
 AWS_REGION="us-east-1"
@@ -156,6 +166,7 @@ You should see Swagger documentation!
 ## Verify Everything is Working
 
 ### Check Application Status
+
 ```bash
 pm2 status
 ```
@@ -163,6 +174,7 @@ pm2 status
 Should show: **online**
 
 ### Check Logs
+
 ```bash
 pm2 logs ironclad-api --tail 20
 ```
@@ -170,6 +182,7 @@ pm2 logs ironclad-api --tail 20
 Should show application started without errors.
 
 ### Test Database
+
 ```bash
 psql -h localhost -U ironclad_user -d ironclad -c "SELECT 1"
 ```
@@ -177,6 +190,7 @@ psql -h localhost -U ironclad_user -d ironclad -c "SELECT 1"
 Should return: **1**
 
 ### Test API Endpoint
+
 ```bash
 # This should work without auth for health check
 curl http://localhost:3000/health
@@ -189,30 +203,39 @@ curl http://localhost:3000/health
 ## Common Issues & Fixes
 
 ### Issue: Connection timeout
+
 **Fix**: Check security group allows your IP for port 22
 
 ### Issue: "Permission denied (publickey)"
+
 **Fix**: Verify .pem file permissions: `chmod 400 key.pem`
 
 ### Issue: Application fails to start
+
 **Fix**: Check logs: `pm2 logs ironclad-api --lines 50`
 
 ### Issue: Port 3000 already in use
-**Fix**: 
+
+**Fix**:
+
 ```bash
 pm2 kill
 pm2 start dist/main.js --name "ironclad-api"
 ```
 
 ### Issue: Database connection refused
+
 **Fix**: Ensure PostgreSQL is running:
+
 ```bash
 sudo systemctl start postgresql
 sudo systemctl status postgresql
 ```
 
 ### Issue: Nginx returns 502 Bad Gateway
-**Fix**: 
+
+**Fix**:
+
 ```bash
 # Check if app is running
 pm2 status
@@ -226,6 +249,7 @@ pm2 restart ironclad-api
 ## Next Steps
 
 ### 1. Setup Domain & SSL
+
 ```bash
 # Install Certbot
 sudo apt-get install -y certbot python3-certbot-nginx
@@ -239,6 +263,7 @@ sudo nano /etc/nginx/sites-available/ironclad-api
 ```
 
 ### 2. Setup Monitoring
+
 ```bash
 # Real-time monitoring
 pm2 monit
@@ -251,6 +276,7 @@ pm2 link <secret_key> <private_key>
 ```
 
 ### 3. Setup Database Backups
+
 ```bash
 # Manual backup
 pg_dump -U ironclad_user -d ironclad > ~/backup.sql
@@ -264,6 +290,7 @@ crontab -e
 ```
 
 ### 4. Deploy Updates
+
 ```bash
 cd /home/ubuntu/ironclad_apis
 
@@ -322,13 +349,16 @@ pm2 restart all      # Restart all apps
 ## Costs (AWS Free Tier)
 
 **Included (12 months free):**
+
 - EC2: 1 x t3.micro or t2.micro (not t3.medium)
 - RDS: 1 x db.t2.micro PostgreSQL
 
 **If using t3.medium:**
+
 - ~$0.04/hour = ~$30/month
 
 **Cost optimization:**
+
 - Use smaller instance for dev (t3.micro)
 - Use RDS for production (more reliable)
 - Use CloudFront for static files
@@ -340,6 +370,7 @@ pm2 restart all      # Restart all apps
 **Full documentation**: See `AWS_EC2_DEPLOYMENT_GUIDE.md`
 
 **Issues?** Check:
+
 1. `pm2 logs ironclad-api`
 2. `sudo tail -f /var/log/nginx/error.log`
 3. `psql -h localhost -U ironclad_user -d ironclad -c "SELECT 1"`

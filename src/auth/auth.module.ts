@@ -7,6 +7,7 @@ import { AuthController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { UsersModule } from '../users/users.module';
+import { CommonModule } from '../common/common.module';
 import * as dotenv from 'dotenv';
 dotenv.config();
 
@@ -21,7 +22,8 @@ dotenv.config();
       expiresIn: Number(process.env.JWT_ACCESS_EXPIRES_IN ?? 900),
     },
   }),
-    UsersModule
+    UsersModule,
+    CommonModule
   ],
   providers: [AuthService, PrismaService, JwtStrategy, JwtAuthGuard],
   controllers: [AuthController],

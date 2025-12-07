@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../common/services/email.service';
+import { EmailNotificationService } from '../common/services/email-notification.service';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 
@@ -8,7 +9,8 @@ import * as crypto from 'crypto';
 export class UsersService {
   constructor(
     private prisma: PrismaService,
-    private emailService: EmailService
+    private emailService: EmailService,
+    private emailNotification: EmailNotificationService
   ) {}
 
   // inside UsersService class
@@ -73,14 +75,21 @@ async createUserAndAttachToTenant(opts: {
 
     // 5) Send welcome email asynchronously (don't wait for it)
     if (opts.sendWelcomeEmail !== false) {
-      const loginUrl = process.env.APP_LOGIN_URL || 'https://app.ironclad.local/login';
-      this.emailService.sendWelcomeEmail(
+      this.emailNotification.sendWelcomeEmail(
         result.email,
         result.displayName || result.email.split('@')[0],
         result.tempPassword,
-        result.tenant.name,
-        loginUrl
-      ).catch(err => {
+        result.tenant.name
+      ).then(async () => {
+        // Mark as sent in database
+        await this.prisma.user.update({
+          where: { id: result.id },
+          data: {
+            welcomeEmailSent: true,
+            welcomeEmailSentAt: new Date(),
+          },
+        });
+      }).catch(err => {
         console.error('Failed to send welcome email:', err);
       });
     }
@@ -162,6 +171,25 @@ async createUserAndAttachToTenant(opts: {
           roles: userTenant.roles,
           userTenantId: userTenant.id,
         };
+      });
+
+      // Send welcome email asynchronously (don't wait for it)
+      this.emailNotification.sendWelcomeEmail(
+        result.email,
+        result.displayName || result.email.split('@')[0],
+        opts.password,
+        result.tenantName
+      ).then(async () => {
+        // Mark as sent in database
+        await this.prisma.user.update({
+          where: { id: result.id },
+          data: {
+            welcomeEmailSent: true,
+            welcomeEmailSentAt: new Date(),
+          },
+        });
+      }).catch(err => {
+        console.error('Failed to send welcome email:', err);
       });
 
       return result;
@@ -345,6 +373,163 @@ async createUserAndAttachToTenant(opts: {
       where: { userId },
     });
     return ut;
+  }
+
+  /**
+   * Delete a user by ID
+   * Removes UserTenant relationship and the user record
+   * Performs cascade deletion in transaction
+   */
+  async deleteUserById(userId: string) {
+    try {
+      const result = await this.prisma.$transaction(async (tx) => {
+        // 1) Find user to ensure it exists
+        const user = await tx.user.findUnique({ where: { id: userId } });
+        if (!user) {
+          throw new BadRequestException('User not found');
+        }
+
+        // 2) Delete UserTenant relationships
+        await tx.userTenant.deleteMany({
+          where: { userId },
+        });
+
+        // 3) Delete the user
+        const deleted = await tx.user.delete({
+          where: { id: userId },
+        });
+
+        return {
+          success: true,
+          message: `User ${deleted.email} deleted successfully`,
+          deletedUser: {
+            id: deleted.id,
+            email: deleted.email,
+            displayName: deleted.displayName,
+            deletedAt: new Date().toISOString(),
+          },
+        };
+      });
+
+      return result;
+    } catch (err) {
+      if (err instanceof BadRequestException) throw err;
+      throw new BadRequestException('Failed to delete user: ' + (err?.message || 'Unknown error'));
+    }
+  }
+
+  /**
+   * Get all users - both tenant users and platform users
+   * Public endpoint accessible to anyone
+   */
+  async getAllUsers() {
+    // Fetch all tenant users
+    const tenantUsers = await this.prisma.tenantUser.findMany({
+      select: {
+        id: true,
+        email: true,
+        displayName: true,
+        status: true,
+        tenantId: true,
+        tenantRoles: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Fetch all platform users
+    const platformUsers = await this.prisma.platformUser.findMany({
+      select: {
+        id: true,
+        email: true,
+        displayName: true,
+        status: true,
+        platformRoles: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return {
+      tenantUsers,
+      platformUsers,
+      total: {
+        tenantUsers: tenantUsers.length,
+        platformUsers: platformUsers.length,
+        combinedTotal: tenantUsers.length + platformUsers.length,
+      },
+    };
+  }
+
+  /**
+   * Create a platform user (admin user)
+   * Platform users are not tied to any tenant
+   */
+  async createPlatformUser(opts: {
+    email: string;
+    password: string;
+    displayName: string;
+    platformRoles: string[];
+  }) {
+    const salt = parseInt(process.env.BCRYPT_SALT_ROUNDS || '12', 10);
+    const passwordHash = await bcrypt.hash(opts.password, salt);
+
+    try {
+      // Check if email already exists in platform users
+      const existing = await this.prisma.platformUser.findUnique({
+        where: { email: opts.email },
+      });
+
+      if (existing) {
+        throw new ConflictException('Platform user with this email already exists');
+      }
+
+      // Create platform user
+      const created = await this.prisma.platformUser.create({
+        data: {
+          email: opts.email,
+          passwordHash,
+          displayName: opts.displayName,
+          status: 'active',
+          platformRoles: opts.platformRoles,
+        },
+      });
+
+      // Send welcome email asynchronously (don't wait for it)
+      const tenantName = 'Ironclad Platform';
+      this.emailNotification.sendWelcomeEmail(
+        created.email,
+        created.displayName || created.email.split('@')[0],
+        opts.password,
+        tenantName
+      ).then(async () => {
+        // Mark as sent in database
+        await this.prisma.platformUser.update({
+          where: { id: created.id },
+          data: {
+            welcomeEmailSent: true,
+            welcomeEmailSentAt: new Date(),
+          },
+        });
+      }).catch(err => {
+        console.error('Failed to send welcome email:', err);
+      });
+
+      return {
+        id: created.id,
+        email: created.email,
+        displayName: created.displayName,
+        status: created.status,
+        platformRoles: created.platformRoles,
+        createdAt: created.createdAt,
+        updatedAt: created.updatedAt,
+      };
+    } catch (err) {
+      if (err instanceof ConflictException) throw err;
+      throw new BadRequestException('Failed to create platform user: ' + (err?.message || 'Unknown error'));
+    }
   }
 }
 

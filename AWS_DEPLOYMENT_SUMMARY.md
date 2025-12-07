@@ -5,12 +5,14 @@ Your Ironclad APIs are now ready to deploy to AWS EC2!
 ## 📋 What's Included
 
 ### 1. **Deployment Files**
+
 - ✅ `deploy.sh` - Automated deployment script
 - ✅ `AWS_EC2_DEPLOYMENT_GUIDE.md` - Comprehensive guide with all steps
 - ✅ `QUICK_DEPLOY_EC2.md` - 5-minute quick start
 - ✅ `DEPLOYMENT_CHECKLIST.md` - Detailed verification checklist
 
 ### 2. **What Gets Deployed**
+
 - NestJS API application
 - PostgreSQL database (local or RDS)
 - PM2 process manager
@@ -22,17 +24,20 @@ Your Ironclad APIs are now ready to deploy to AWS EC2!
 ## 🚀 Quick Start (5 Minutes)
 
 ### Step 1: Create EC2 Instance
+
 1. Go to AWS Console → EC2
 2. Launch Instance → Ubuntu 22.04 LTS → t3.medium
 3. Create security group with ports: 22, 80, 443, 3000
 4. Download .pem key file
 
 ### Step 2: SSH to Instance
+
 ```bash
 ssh -i "path/to/key.pem" ubuntu@<your-ec2-ip>
 ```
 
 ### Step 3: Run Deployment
+
 ```bash
 cd /tmp
 curl -O https://raw.githubusercontent.com/Lakshyachitransh/ironclad_apis/main/deploy.sh
@@ -41,6 +46,7 @@ chmod +x deploy.sh
 ```
 
 ### Step 4: Configure & Access
+
 ```bash
 # Update .env with AWS credentials
 nano /home/ubuntu/ironclad_apis/.env
@@ -55,13 +61,17 @@ pm2 restart ironclad-api
 ## 📚 Documentation
 
 ### For Quick Deployment
+
 👉 **Read**: `QUICK_DEPLOY_EC2.md`
+
 - 5-minute deployment
 - Common issues & fixes
 - Basic commands
 
 ### For Detailed Step-by-Step
+
 👉 **Read**: `AWS_EC2_DEPLOYMENT_GUIDE.md`
+
 - Comprehensive instructions
 - SSL/TLS setup
 - Performance tuning
@@ -69,7 +79,9 @@ pm2 restart ironclad-api
 - Security best practices
 
 ### For Verification
+
 👉 **Read**: `DEPLOYMENT_CHECKLIST.md`
+
 - Pre-deployment checklist
 - Verification steps
 - Testing procedures
@@ -108,16 +120,19 @@ The `deploy.sh` script automatically:
 ## 📋 Deployment Checklist
 
 **Pre-Deployment:**
+
 - [ ] Code pushed to GitHub (main branch)
 - [ ] Local build successful
 - [ ] All tests passing
 
 **AWS Setup:**
+
 - [ ] EC2 instance created
 - [ ] Security group configured
 - [ ] Key pair downloaded
 
 **Deployment:**
+
 - [ ] SSH connection verified
 - [ ] Deployment script executed
 - [ ] Environment variables configured
@@ -125,6 +140,7 @@ The `deploy.sh` script automatically:
 - [ ] API accessible
 
 **Post-Deployment:**
+
 - [ ] SSL certificate installed (optional)
 - [ ] Database backups configured
 - [ ] Monitoring enabled
@@ -135,12 +151,14 @@ The `deploy.sh` script automatically:
 Once deployed:
 
 ### Via Public IP (during development)
+
 ```
 Swagger Docs: http://<your-ec2-public-ip>/api/docs
 API Base: http://<your-ec2-public-ip>/api
 ```
 
 ### Via Domain (production)
+
 ```
 Swagger Docs: https://yourdomain.com/api/docs
 API Base: https://yourdomain.com/api
@@ -181,6 +199,7 @@ pm2 restart ironclad-api           # Restart app
 ## 📊 Instance Requirements
 
 ### Minimum (Development)
+
 - **Instance**: t3.micro or t2.micro
 - **Storage**: 20GB
 - **Memory**: 1GB
@@ -188,6 +207,7 @@ pm2 restart ironclad-api           # Restart app
 - **Cost**: Free tier or ~$10/month
 
 ### Recommended (Production)
+
 - **Instance**: t3.large or larger
 - **Storage**: 50GB+ gp3
 - **Memory**: 8GB
@@ -220,22 +240,26 @@ pm2 restart ironclad-api           # Restart app
 ## 🆘 Troubleshooting
 
 ### Application won't start
+
 ```bash
 pm2 logs ironclad-api --lines 100
 ```
 
 ### Database connection error
+
 ```bash
 psql -h localhost -U ironclad_user -d ironclad -c "SELECT 1"
 ```
 
 ### Nginx 502 error
+
 ```bash
 pm2 status
 curl http://localhost:3000
 ```
 
 ### Port conflicts
+
 ```bash
 sudo lsof -i :3000
 pm2 kill && npm run start

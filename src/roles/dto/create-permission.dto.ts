@@ -1,12 +1,35 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString } from 'class-validator';
+import { IsString, IsOptional } from 'class-validator';
 
 export class CreatePermissionDto {
-  @ApiProperty({ example: 'tenants.create' })
+  @ApiProperty({ example: 'tenants.create', description: 'Permission code (format: resource.action)' })
   @IsString()
-  id: string;
+  code: string;
 
-  @ApiProperty({ example: 'Create tenants' })
+  @ApiProperty({ example: 'Create tenants', description: 'Permission name' })
   @IsString()
-  description: string;
+  @IsOptional()
+  name?: string;
+
+  @ApiProperty({ example: 'tenants', description: 'Resource name' })
+  @IsString()
+  resource: string;
+
+  @ApiProperty({ example: 'create', description: 'Action name' })
+  @IsString()
+  action: string;
+
+  @ApiProperty({ example: 'Tenant Management', description: 'Permission category' })
+  @IsString()
+  category: string;
+
+  @ApiProperty({ example: 'Create new tenants', description: 'Permission description', required: false })
+  @IsString()
+  @IsOptional()
+  description?: string;
+
+  // Keep backwards compatibility
+  @IsOptional()
+  id?: string;
 }
+

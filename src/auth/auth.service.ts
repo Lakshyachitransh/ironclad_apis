@@ -31,8 +31,20 @@ export class AuthService {
 
   /**
    * Fetch user's tenant and roles from UserTenant
+   * Also includes platform-level roles from User.platformRoles
    */
   async getUserTenantAndRoles(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { platformRoles: true }
+    });
+    
+    // If user has platform roles, return those (no specific tenant)
+    if (user?.platformRoles && user.platformRoles.length > 0) {
+      return { tenantId: null, roles: user.platformRoles };
+    }
+    
+    // Otherwise, check for tenant-specific roles
     const userTenant = await this.prisma.userTenant.findFirst({
       where: { userId },
       select: { tenantId: true, roles: true }

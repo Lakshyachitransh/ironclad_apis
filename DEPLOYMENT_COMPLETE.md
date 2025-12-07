@@ -47,6 +47,7 @@ Your Ironclad APIs application is **fully prepared for AWS EC2 deployment** with
 ### 🤖 **1 Automated Deployment Script**
 
 ✅ **`deploy.sh`** - FULLY AUTOMATED
+
 - One script, everything configured
 - Takes ~5 minutes
 - Installs all dependencies
@@ -58,6 +59,7 @@ Your Ironclad APIs application is **fully prepared for AWS EC2 deployment** with
 ### 📊 **1 Summary Document**
 
 ✅ **`AWS_DEPLOYMENT_SUMMARY.md`**
+
 - Package overview
 - 3 ways to deploy
 - Getting started guide
@@ -68,6 +70,7 @@ Your Ironclad APIs application is **fully prepared for AWS EC2 deployment** with
 ## 🚀 Your 3 Deployment Options
 
 ### ⚡ Option 1: Super Fast (5 minutes)
+
 **Read**: `QUICK_DEPLOY_EC2.md`
 
 ```bash
@@ -85,11 +88,13 @@ chmod +x deploy.sh
 ```
 
 ### 📖 Option 2: Step-by-Step (20 minutes)
+
 **Read**: `AWS_EC2_DEPLOYMENT_GUIDE.md`
 
 Follow all steps manually for full understanding and customization of each component.
 
 ### ✅ Option 3: Verify Everything (Recommended)
+
 **Use**: `DEPLOYMENT_CHECKLIST.md`
 
 Deploy using Option 1 or 2, then verify every step using the detailed checklist.
@@ -102,6 +107,7 @@ All files are in your repository:
 👉 https://github.com/Lakshyachitransh/ironclad_apis
 
 **Recent commits (all pushed to main):**
+
 ```
 e7af6c4 - docs: Add EC2 deployment quick reference card
 a4cb51f - docs: Add deployment readiness guide
@@ -200,18 +206,21 @@ AWS EC2 Instance (Ubuntu 22.04 LTS)
 ## 💰 Deployment Costs
 
 ### Free Tier (First 12 months)
+
 - EC2 t2.micro: Free
 - RDS db.t2.micro: Free
 - 20GB storage: Free
 - **Total: $0/month**
 
 ### Small Production ($65/month)
+
 - EC2 t3.medium: $30/month
 - RDS db.t3.micro: $30/month
 - Storage 50GB gp3: $5/month
 - **Total: $65/month**
 
 ### Medium Production ($140/month)
+
 - EC2 t3.large: $60/month
 - RDS db.t3.small: $60/month
 - Storage 100GB gp3: $10/month
@@ -238,11 +247,13 @@ AWS EC2 Instance (Ubuntu 22.04 LTS)
 ## 🚀 Getting Started (Right Now)
 
 ### Step 1: Read Documentation
+
 ```
 Start with: QUICK_DEPLOY_EC2.md (10 min read)
 ```
 
 ### Step 2: Create EC2 Instance
+
 ```
 AWS Console → EC2 → Launch Instance
 - Ubuntu 22.04 LTS
@@ -252,11 +263,13 @@ AWS Console → EC2 → Launch Instance
 ```
 
 ### Step 3: SSH to Instance
+
 ```bash
 ssh -i "path/to/key.pem" ubuntu@<your-ec2-public-ip>
 ```
 
 ### Step 4: Deploy (Automated)
+
 ```bash
 cd /tmp
 curl -O https://raw.githubusercontent.com/Lakshyachitransh/ironclad_apis/main/deploy.sh
@@ -265,6 +278,7 @@ chmod +x deploy.sh
 ```
 
 ### Step 5: Access API
+
 ```
 Browser: http://<your-ec2-public-ip>/api/docs
 ```
@@ -276,7 +290,7 @@ Browser: http://<your-ec2-public-ip>/api/docs
 ## 📖 Recommended Reading Order
 
 1. **This File** (You are here) - 5 min
-2. **`DEPLOYMENT_READY.md`** - 5 min  
+2. **`DEPLOYMENT_READY.md`** - 5 min
 3. **`EC2_DEPLOYMENT_CARD.md`** - 3 min
 4. **`QUICK_DEPLOY_EC2.md`** - 10 min
 5. **Then Deploy!** - 5 min
@@ -288,15 +302,19 @@ Browser: http://<your-ec2-public-ip>/api/docs
 ## 📞 Support & Troubleshooting
 
 ### Quick Issues
+
 → Check `EC2_DEPLOYMENT_CARD.md` (Troubleshooting section)
 
-### Common Problems  
+### Common Problems
+
 → Check `QUICK_DEPLOY_EC2.md` (Common Issues & Fixes)
 
 ### Detailed Help
+
 → Check `AWS_EC2_DEPLOYMENT_GUIDE.md` (Troubleshooting section)
 
 ### Full Verification
+
 → Use `DEPLOYMENT_CHECKLIST.md` (Troubleshooting Checklist)
 
 ---
@@ -304,9 +322,11 @@ Browser: http://<your-ec2-public-ip>/api/docs
 ## 🔗 Important Links
 
 ### Your GitHub Repository
+
 👉 https://github.com/Lakshyachitransh/ironclad_apis
 
 ### Official Documentation
+
 - NestJS: https://docs.nestjs.com
 - AWS EC2: https://docs.aws.amazon.com/ec2/
 - PM2: https://pm2.keymetrics.io/docs/
@@ -314,6 +334,7 @@ Browser: http://<your-ec2-public-ip>/api/docs
 - Prisma: https://www.prisma.io/docs/
 
 ### AWS Console
+
 - AWS Login: https://console.aws.amazon.com
 - EC2 Dashboard: https://console.aws.amazon.com/ec2/
 
@@ -358,16 +379,16 @@ Your complete AWS EC2 deployment package is ready:
 
 ## 📊 Deployment Statistics
 
-| Item | Details |
-|------|---------|
-| **Documentation Files** | 5 files |
-| **Automated Scripts** | 1 script |
-| **Total Guide Length** | ~2000+ lines |
-| **Deployment Time** | 5 minutes |
-| **Setup Complexity** | None (fully automated) |
-| **Security Level** | Production-ready |
-| **Cost (Free Tier)** | $0/month |
-| **Cost (Small Prod)** | $65/month |
+| Item                    | Details                |
+| ----------------------- | ---------------------- |
+| **Documentation Files** | 5 files                |
+| **Automated Scripts**   | 1 script               |
+| **Total Guide Length**  | ~2000+ lines           |
+| **Deployment Time**     | 5 minutes              |
+| **Setup Complexity**    | None (fully automated) |
+| **Security Level**      | Production-ready       |
+| **Cost (Free Tier)**    | $0/month               |
+| **Cost (Small Prod)**   | $65/month              |
 
 ---
 

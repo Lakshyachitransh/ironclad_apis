@@ -17,7 +17,6 @@ Your Ironclad APIs application is now fully configured for AWS EC2 deployment wi
    - Step-by-step instructions
    - Common issues & fixes
    - Useful commands
-   
 3. **`AWS_EC2_DEPLOYMENT_GUIDE.md`** 📚 COMPREHENSIVE
    - Detailed step-by-step guide
    - EC2 instance creation
@@ -45,6 +44,7 @@ Your Ironclad APIs application is now fully configured for AWS EC2 deployment wi
 ## 🎯 3 Ways to Deploy
 
 ### Option 1: Super Fast (5 min) ⚡
+
 → Read `QUICK_DEPLOY_EC2.md`
 
 ```bash
@@ -55,11 +55,13 @@ chmod +x deploy.sh
 ```
 
 ### Option 2: Step-by-Step (20 min) 📖
+
 → Read `AWS_EC2_DEPLOYMENT_GUIDE.md`
 
 Follow all steps manually for full understanding and customization.
 
 ### Option 3: Verify Everything (Recommended) ✅
+
 → Use `DEPLOYMENT_CHECKLIST.md`
 
 Deploy using Option 1 or 2, then verify using the detailed checklist.
@@ -67,6 +69,7 @@ Deploy using Option 1 or 2, then verify using the detailed checklist.
 ## 🚀 Getting Started (Right Now)
 
 ### Step 1: Create AWS EC2 Instance
+
 - Go to AWS Console
 - EC2 → Launch Instance
 - Select Ubuntu 22.04 LTS
@@ -75,6 +78,7 @@ Deploy using Option 1 or 2, then verify using the detailed checklist.
 - Create and download .pem key
 
 ### Step 2: SSH to Instance
+
 ```bash
 # Windows (PowerShell)
 ssh -i "path/to/key.pem" ubuntu@<your-ec2-ip>
@@ -84,6 +88,7 @@ ssh -i ~/path/to/key.pem ubuntu@<your-ec2-ip>
 ```
 
 ### Step 3: Deploy (Automated)
+
 ```bash
 cd /tmp
 curl -O https://raw.githubusercontent.com/Lakshyachitransh/ironclad_apis/main/deploy.sh
@@ -92,6 +97,7 @@ chmod +x deploy.sh
 ```
 
 Script will automatically:
+
 - ✓ Update system
 - ✓ Install Node.js 18
 - ✓ Install PostgreSQL
@@ -104,6 +110,7 @@ Script will automatically:
 - ✓ Configure Nginx
 
 ### Step 4: Configure AWS S3 (If Using)
+
 ```bash
 nano /home/ubuntu/ironclad_apis/.env
 
@@ -117,6 +124,7 @@ pm2 restart ironclad-api
 ```
 
 ### Step 5: Access Your API
+
 ```
 Browser: http://<your-ec2-ip>/api/docs
 ```
@@ -173,12 +181,14 @@ Ironclad APIs on EC2
 ## 📋 Deployment Checklist
 
 **Before Deploying:**
+
 - [ ] Code pushed to GitHub (main branch)
 - [ ] Build successful locally
 - [ ] AWS account ready
 - [ ] .pem key file downloaded
 
 **During Deployment:**
+
 - [ ] EC2 instance created (Ubuntu 22.04 LTS)
 - [ ] Security group configured
 - [ ] SSH connection verified
@@ -186,6 +196,7 @@ Ironclad APIs on EC2
 - [ ] Application started successfully
 
 **After Deployment:**
+
 - [ ] API accessible at http://<ip>/api/docs
 - [ ] Database connected successfully
 - [ ] PM2 shows "online" status
@@ -202,18 +213,21 @@ Ironclad APIs on EC2
 ## 💰 Cost Estimate
 
 ### Development (Free Tier Eligible)
+
 - EC2 t2.micro: Free
 - RDS db.t2.micro: Free
 - Storage: ~20GB free
 - **Total**: $0
 
 ### Small Production
+
 - EC2 t3.medium: ~$0.04/hour = ~$30/month
 - RDS db.t3.micro: ~$30/month
 - Storage: 50GB gp3 = ~$5/month
 - **Total**: ~$65/month
 
 ### Medium Production
+
 - EC2 t3.large: ~$0.08/hour = ~$60/month
 - RDS db.t3.small: ~$60/month
 - Storage: 100GB gp3 = ~$10/month
@@ -234,12 +248,14 @@ Ironclad APIs on EC2
 ## 📞 Support & Resources
 
 ### Documentation Files
+
 - `AWS_DEPLOYMENT_SUMMARY.md` - Overview
 - `QUICK_DEPLOY_EC2.md` - Quick guide
 - `AWS_EC2_DEPLOYMENT_GUIDE.md` - Detailed guide
 - `DEPLOYMENT_CHECKLIST.md` - Verification
 
 ### Official Documentation
+
 - [NestJS Docs](https://docs.nestjs.com)
 - [AWS EC2 Guide](https://docs.aws.amazon.com/ec2/)
 - [PM2 Documentation](https://pm2.keymetrics.io/docs/)
@@ -247,6 +263,7 @@ Ironclad APIs on EC2
 - [Prisma Docs](https://www.prisma.io/docs/)
 
 ### Common Issues
+
 - Check `QUICK_DEPLOY_EC2.md` → Troubleshooting section
 - Check `DEPLOYMENT_CHECKLIST.md` → Troubleshooting checklist
 
@@ -279,6 +296,7 @@ All files and code are in your GitHub repository:
 👉 https://github.com/Lakshyachitransh/ironclad_apis
 
 **Recent commits:**
+
 - ✅ Deployment guides added
 - ✅ Deployment script added
 - ✅ Deployment checklist added

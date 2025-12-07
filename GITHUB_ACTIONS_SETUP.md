@@ -7,32 +7,37 @@ Automated deployment from GitHub to your AWS EC2 instance using GitHub Actions.
 ### Step 1: Add GitHub Secrets
 
 Go to your GitHub repository settings:
+
 1. Navigate to: `https://github.com/Lakshyachitransh/ironclad_apis/settings/secrets/actions`
 2. Click **"New repository secret"**
 3. Add these secrets:
 
 #### **Secret 1: EC2_HOST**
+
 - **Name**: `EC2_HOST`
 - **Value**: `13.53.151.86` (your EC2 public IP)
 - Click **Add secret**
 
 #### **Secret 2: EC2_SSH_KEY**
+
 - **Name**: `EC2_SSH_KEY`
 - **Value**: Your `.pem` file contents (paste entire key)
-  
+
   To get your key content:
+
   ```powershell
   # Windows PowerShell
   Get-Content "C:\Users\DELL\Downloads\ironclad-key.pem" -Raw | Set-Clipboard
   # Key is now in clipboard, paste it into GitHub
   ```
-  
+
   Or:
+
   ```bash
   # Linux/Mac
   cat /path/to/ironclad-key.pem | pbcopy
   ```
-  
+
 - Click **Add secret**
 
 ---
@@ -40,6 +45,7 @@ Go to your GitHub repository settings:
 ### Step 2: Verify Secrets Added
 
 Your GitHub repository secrets should now have:
+
 ```
 ✅ EC2_HOST = 13.53.151.86
 ✅ EC2_SSH_KEY = -----BEGIN RSA PRIVATE KEY-----
@@ -54,12 +60,14 @@ Your GitHub repository secrets should now have:
 Before using GitHub Actions, we need to setup your EC2 instance once:
 
 #### Connect via SSH:
+
 ```powershell
 # Windows PowerShell
 ssh -i "C:\Users\DELL\Downloads\ironclad-key.pem" ubuntu@13.53.151.86
 ```
 
 #### Run initial setup:
+
 ```bash
 # Update system
 sudo apt update && sudo apt upgrade -y
@@ -175,6 +183,7 @@ Now, every time you push to `main` branch, GitHub Actions will automatically:
 5. ✅ Restart application on EC2
 
 **Just push your code:**
+
 ```bash
 git add .
 git commit -m "Your changes"
@@ -184,6 +193,7 @@ git push origin main
 ### **Manual Deployment (Anytime)**
 
 Go to your GitHub repository:
+
 1. Click **"Actions"** tab
 2. Click **"Deploy to EC2"** workflow
 3. Click **"Run workflow"** button
@@ -206,6 +216,7 @@ Deployment will start automatically!
 ### **Via EC2 Instance**
 
 SSH to your instance and check:
+
 ```bash
 # Check application status
 pm2 status
@@ -250,6 +261,7 @@ Verify application responding
 ### **SSH Connection Failed**
 
 Check your secrets:
+
 ```powershell
 # Verify EC2_HOST
 echo ${{ secrets.EC2_HOST }}  # Should be: 13.53.151.86
@@ -262,6 +274,7 @@ echo ${{ secrets.EC2_HOST }}  # Should be: 13.53.151.86
 ### **Application Still on Old Version**
 
 Check if PM2 is running old version:
+
 ```bash
 pm2 list
 
@@ -274,6 +287,7 @@ pm2 kill
 ### **Database Migration Failed**
 
 SSH to instance and check:
+
 ```bash
 psql -h localhost -U ironclad_user -d ironclad -c "\dt"
 
@@ -284,6 +298,7 @@ npx prisma migrate status
 ### **Nginx 502 Error**
 
 Check if application is running:
+
 ```bash
 pm2 status    # Should show "online"
 pm2 logs      # Check for errors
@@ -312,11 +327,13 @@ pm2 restart ironclad-api
 If you need to change environment variables:
 
 ### **Option 1: Via GitHub Actions** (Recommended)
+
 1. Update `.env` locally
 2. Push to repository
 3. GitHub Actions will deploy with new env vars
 
 ### **Option 2: Directly on EC2**
+
 ```bash
 ssh -i "key.pem" ubuntu@13.53.151.86
 nano /home/ubuntu/ironclad_apis/.env
@@ -341,16 +358,19 @@ pm2 restart ironclad-api
 To check deployment status:
 
 **GitHub Actions Dashboard:**
+
 ```
 Repository → Actions → Deploy to EC2 → Latest Run
 ```
 
 **Application Status:**
+
 ```
 http://13.53.151.86/api/docs
 ```
 
 **Real-time Logs:**
+
 ```bash
 ssh -i "key.pem" ubuntu@13.53.151.86
 pm2 logs ironclad-api

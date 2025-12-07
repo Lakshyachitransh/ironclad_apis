@@ -242,7 +242,7 @@ Request Lifecycle:
     ├─ Verify token hasn't expired
     ├─ Extract claims (userId, email, roles)
     └─ Set req.user with user data
-    
+
     ❌ If fails → 401 Unauthorized
     ✅ If passes → Continue to next guard
 
@@ -251,7 +251,7 @@ Request Lifecycle:
     ├─ Check if user has ANY required role
     ├─ Compare user.roles with required roles
     └─ Allow or deny based on match
-    
+
     ❌ If no match → 403 Forbidden
     ✅ If match → Execute handler
 
@@ -259,7 +259,7 @@ Request Lifecycle:
     ├─ Run business logic in service
     ├─ Access database (Prisma)
     └─ Return response
-    
+
     ✅ 200 OK or appropriate status code
     ❌ If error → Error response
 ```
@@ -275,7 +275,7 @@ Organization Level
      ├─ Can assign tenant admins
      ├─ Can update database
      └─ Can run migrations
-     
+
      └─ Tenant Level (belongs to multiple tenants)
         │
         ├─── tenant_admin (Tenant Admin)

@@ -139,38 +139,41 @@ curl -X GET http://localhost:3000/api/courses/quizzes/quiz-1 \
 ### Sample Video Content
 
 **Easy Level:**
+
 ```
-HTML is the foundation of web pages. It provides structure using tags like <div>, <p>, and <h1>. 
+HTML is the foundation of web pages. It provides structure using tags like <div>, <p>, and <h1>.
 CSS is used to style HTML elements. JavaScript adds interactivity.
 ```
 
 **Medium Level:**
+
 ```
 JavaScript uses prototypal inheritance for object creation. Functions are first-class objects.
-Closures allow functions to maintain access to outer scope variables. The event loop handles 
+Closures allow functions to maintain access to outer scope variables. The event loop handles
 asynchronous operations. Callbacks, Promises, and async/await are three ways to handle async code.
 ```
 
 **Complex Level:**
+
 ```
-React is a JavaScript library for building user interfaces with components. State management 
-can be handled with useState hooks or Redux. Virtual DOM optimization improves performance. 
+React is a JavaScript library for building user interfaces with components. State management
+can be handled with useState hooks or Redux. Virtual DOM optimization improves performance.
 Higher-order components and render props provide reusability patterns. TypeScript adds type safety.
-The Context API provides state management without external libraries. Server-side rendering 
+The Context API provides state management without external libraries. Server-side rendering
 improves SEO for React applications.
 ```
 
 ## Status Codes
 
-| Code | Meaning | Typical Cause |
-|------|---------|---------------|
-| 201 | Quiz generated successfully | Request processed |
-| 200 | Quizzes retrieved successfully | Data found |
-| 400 | Bad request | Invalid input data |
-| 401 | Unauthorized | Missing or invalid token |
-| 403 | Forbidden | Insufficient permissions |
-| 404 | Not found | Resource doesn't exist |
-| 500 | Server error | OpenAI API error |
+| Code | Meaning                        | Typical Cause            |
+| ---- | ------------------------------ | ------------------------ |
+| 201  | Quiz generated successfully    | Request processed        |
+| 200  | Quizzes retrieved successfully | Data found               |
+| 400  | Bad request                    | Invalid input data       |
+| 401  | Unauthorized                   | Missing or invalid token |
+| 403  | Forbidden                      | Insufficient permissions |
+| 404  | Not found                      | Resource doesn't exist   |
+| 500  | Server error                   | OpenAI API error         |
 
 ## Debugging
 
@@ -208,12 +211,14 @@ npx prisma studio
 ## Common Errors & Solutions
 
 ### Error: "Missing OPENAI_API_KEY"
+
 ```
 Solution: Set environment variable
 $env:OPENAI_API_KEY = "sk-your-key-here"
 ```
 
 ### Error: "videoContent is required"
+
 ```
 Solution: Provide non-empty video content in request body
 {
@@ -222,12 +227,14 @@ Solution: Provide non-empty video content in request body
 ```
 
 ### Error: "Lesson not found"
+
 ```
 Solution: Verify lessonId exists in database
 # Check in Prisma Studio or database
 ```
 
 ### Error: "Unauthorized - insufficient permissions"
+
 ```
 Solution: User needs training_manager or instructor role
 # Check user roles in database

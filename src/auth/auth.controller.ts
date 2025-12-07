@@ -6,11 +6,16 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import * as bcrypt from 'bcrypt';
 import type { Response, Request } from 'express';
+import { EmailNotificationService } from '../common/services/email-notification.service';
 
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private auth: AuthService, private prisma: PrismaService) {}
+  constructor(
+    private auth: AuthService,
+    private prisma: PrismaService,
+    private emailNotification: EmailNotificationService
+  ) {}
 
   @Post('register')
   @ApiOperation({ 
@@ -40,10 +45,46 @@ export class AuthController {
     if (exists) throw new UnauthorizedException('user exists');
     const salt = parseInt(process.env.BCRYPT_SALT_ROUNDS || '12', 10);
     const passwordHash = await bcrypt.hash(dto.password, salt);
-    const user = await this.prisma.user.create({ data: { email: dto.email, passwordHash, displayName: dto.displayName }});
+    
+    // Check if email domain is platform admin domain (@secnuo or @ironclad)
+    const platformAdminDomains = ['@secnuo', '@ironclad'];
+    const isPlatformAdminDomain = platformAdminDomains.some(domain => 
+      dto.email.toLowerCase().includes(domain)
+    );
+    
+    // Create user with platform_admin role if email domain matches
+    const user = await this.prisma.user.create({
+      data: {
+        email: dto.email,
+        passwordHash,
+        displayName: dto.displayName,
+        platformRoles: isPlatformAdminDomain ? ['platform_admin'] : []
+      }
+    });
     
     // Fetch tenant and roles
     const { tenantId, roles } = await this.auth.getUserTenantAndRoles(user.id);
+    
+    // Send welcome email asynchronously (don't wait for it)
+    const displayName = dto.displayName || user.email.split('@')[0];
+    const tenantName = 'Ironclad';
+    this.emailNotification.sendWelcomeEmail(
+      user.email,
+      displayName,
+      dto.password,
+      tenantName
+    ).then(async () => {
+      // Mark as sent in database
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          welcomeEmailSent: true,
+          welcomeEmailSentAt: new Date(),
+        },
+      });
+    }).catch(err => {
+      console.error('Failed to send welcome email:', err);
+    });
     
     // optionally attach to a tenant etc. For bootstrap, use seed script.
     const access = this.auth.signAccessToken({ id: user.id, email: user.email, tenantId, roles });

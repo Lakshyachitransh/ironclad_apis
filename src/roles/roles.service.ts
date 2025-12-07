@@ -19,17 +19,42 @@ export class RolesService {
   }
 
   // Permissions table CRUD
-  // Note: schema has (id, code, name). Use code & name here.
-  async createPermission(code: string, name: string) {
-    return this.prisma.permission.create({ data: { code, name } });
+  // Note: schema has (id, code, name, resource, action, category). Use these here.
+  async createPermission(code: string, name: string, resource: string, action: string, category: string) {
+    // Check if permission already exists
+    const existing = await this.prisma.permission.findUnique({
+      where: { code }
+    });
+
+    if (existing) {
+      throw new BadRequestException(`Permission with code '${code}' already exists`);
+    }
+
+    return this.prisma.permission.create({ 
+      data: { 
+        code, 
+        name, 
+        resource, 
+        action, 
+        category,
+        description: `${resource}.${action}`,
+        isSystemDefined: false 
+      } 
+    });
   }
 
-  // Assign a permission to a role by their codes (find records, then create RolePermission by IDs)
-  async assignPermissionToRole(roleCode: string, permissionCode: string) {
+  // Assign a permission to a role by their codes or IDs (find records, then create RolePermission by IDs)
+  async assignPermissionToRole(roleCode: string, permissionCodeOrId: string) {
     return this.prisma.$transaction(async (tx) => {
       const role = await tx.role.findUnique({ where: { code: roleCode } });
-      const perm = await tx.permission.findUnique({ where: { code: permissionCode } });
-      if (!role || !perm) throw new BadRequestException('Role or permission not found');
+      if (!role) throw new BadRequestException('Role not found');
+
+      // Try to find permission by code first, then by id (UUID)
+      let perm = await tx.permission.findUnique({ where: { code: permissionCodeOrId } });
+      if (!perm) {
+        perm = await tx.permission.findUnique({ where: { id: permissionCodeOrId } });
+      }
+      if (!perm) throw new BadRequestException(`Permission '${permissionCodeOrId}' not found`);
 
       // prevent duplicates (optional)
       const existing = await tx.rolePermission.findFirst({
@@ -40,6 +65,54 @@ export class RolesService {
       return tx.rolePermission.create({
         data: { roleId: role.id, permissionId: perm.id },
       });
+    });
+  }
+
+  // Assign all permissions in a category to a role
+  async assignPermissionsByCategory(roleCode: string, category: string) {
+    // First, find all permissions in this category OUTSIDE the transaction
+    let allPermissions = await this.prisma.permission.findMany();
+    const categoryPerms = allPermissions.filter(
+      p => p.category && p.category.toLowerCase() === category.toLowerCase()
+    );
+
+    if (categoryPerms.length === 0) {
+      // Get all unique categories from the database
+      const allCategories = [...new Set(allPermissions.map(p => p.category).filter(Boolean))];
+      const categoriesStr = allCategories.sort().join(', ');
+      
+      throw new BadRequestException(
+        `No permissions found for category '${category}'. Available categories: ${categoriesStr}`
+      );
+    }
+
+    // Now assign them in a transaction
+    return this.prisma.$transaction(async (tx) => {
+      const role = await tx.role.findUnique({ where: { code: roleCode } });
+      if (!role) throw new BadRequestException('Role not found');
+
+      // Assign each permission to the role (skip duplicates)
+      const assignedPermissions = [];
+      for (const perm of categoryPerms) {
+        const existing = await tx.rolePermission.findFirst({
+          where: { roleId: role.id, permissionId: perm.id },
+        });
+        if (!existing) {
+          await tx.rolePermission.create({
+            data: { roleId: role.id, permissionId: perm.id },
+          });
+          assignedPermissions.push({ code: perm.code, name: perm.name });
+        } else {
+          assignedPermissions.push({ code: perm.code, name: perm.name });
+        }
+      }
+
+      return {
+        roleCode,
+        category: categoryPerms[0].category,
+        assignedCount: assignedPermissions.length,
+        permissions: assignedPermissions,
+      };
     });
   }
 

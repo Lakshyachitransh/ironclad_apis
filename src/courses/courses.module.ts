@@ -6,6 +6,7 @@ import { QuizzesService } from './quizzes.service';
 import { QuizzesController } from './quizzes.controller';
 import { QuizGeneratorService } from './services/quiz-generator.service';
 import { VideoTranscriptionService } from './services/video-transcription.service';
+import { VideoProcessingService } from './services/video-processing.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { S3Service } from '../common/services/s3.service';
 import { EmailService } from '../common/services/email.service';
@@ -21,7 +22,7 @@ import { CommonModule } from '../common/common.module';
       },
     }),
   ],
-  providers: [CoursesService, QuizzesService, QuizGeneratorService, VideoTranscriptionService, PrismaService, S3Service, EmailService],
+  providers: [CoursesService, QuizzesService, QuizGeneratorService, VideoTranscriptionService, VideoProcessingService, PrismaService, S3Service, EmailService],
   controllers: [CoursesController, QuizzesController]
 })
 export class CoursesModule {}

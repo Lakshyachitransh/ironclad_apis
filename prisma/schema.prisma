@@ -20,6 +20,7 @@ model Tenant {
   status            String                     @default("active")
   createdAt         DateTime                   @default(now())
   users             UserTenant[]
+  tenantUsers       TenantUser[]
   courses           Course[]
   licenses          TenantApplicationLicense[]
   liveClasses       LiveClass[]
@@ -30,22 +31,22 @@ model Tenant {
 }
 
 model Application {
-  id       String                     @id @default(uuid())
-  code     String                     @unique
-  name     String
+  id          String                     @id @default(uuid())
+  code        String                     @unique
+  name        String
   description String?
-  category String? // e.g., "LMS", "Analytics", "Communication"
-  status   String                     @default("active")
-  createdAt DateTime                  @default(now())
-  licenses TenantApplicationLicense[]
-  features ApplicationFeature[]
+  category    String? // e.g., "LMS", "Analytics", "Communication"
+  status      String                     @default("active")
+  createdAt   DateTime                   @default(now())
+  licenses    TenantApplicationLicense[]
+  features    ApplicationFeature[]
 }
 
 model ApplicationFeature {
   id            String      @id @default(uuid())
   application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
   applicationId String
-  code          String      // e.g., "VIDEO_UPLOAD", "QUIZ_GENERATION"
+  code          String // e.g., "VIDEO_UPLOAD", "QUIZ_GENERATION"
   name          String
   description   String?
   createdAt     DateTime    @default(now())
@@ -55,23 +56,23 @@ model ApplicationFeature {
 }
 
 model TenantApplicationLicense {
-  id              String      @id @default(uuid())
-  tenant          Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  tenantId        String
-  application     Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
-  applicationId   String
-  plan            String      @default("standard") // free, standard, premium, enterprise
-  maxSeats        Int         @default(1) // max number of users who can use this app
-  currentSeats    Int         @default(0) // current number of users using this app
-  startDate       DateTime
-  endDate         DateTime?   // null = no expiry
-  status          String      @default("active") // active, suspended, expired, cancelled
-  autoRenew       Boolean     @default(false)
-  notes           String?
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-  createdBy       String?     // org admin user ID
-  licenseUsers    LicenseUser[]
+  id            String        @id @default(uuid())
+  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId      String
+  application   Application   @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  applicationId String
+  plan          String        @default("standard") // free, standard, premium, enterprise
+  maxSeats      Int           @default(1) // max number of users who can use this app
+  currentSeats  Int           @default(0) // current number of users using this app
+  startDate     DateTime
+  endDate       DateTime? // null = no expiry
+  status        String        @default("active") // active, suspended, expired, cancelled
+  autoRenew     Boolean       @default(false)
+  notes         String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  createdBy     String? // org admin user ID
+  licenseUsers  LicenseUser[]
 
   @@unique([tenantId, applicationId], name: "tenant_app_license")
   @@index([tenantId])
@@ -80,15 +81,15 @@ model TenantApplicationLicense {
 }
 
 model LicenseUser {
-  id              String                   @id @default(uuid())
-  license         TenantApplicationLicense @relation(fields: [licenseId], references: [id], onDelete: Cascade)
-  licenseId       String
-  userId          String // user who has been assigned this license
-  assignedAt      DateTime                 @default(now())
-  revokedAt       DateTime?
-  status          String                   @default("active") // active, inactive, revoked
-  lastAccessedAt  DateTime?
-  createdAt       DateTime                 @default(now())
+  id             String                   @id @default(uuid())
+  license        TenantApplicationLicense @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  licenseId      String
+  userId         String // user who has been assigned this license
+  assignedAt     DateTime                 @default(now())
+  revokedAt      DateTime?
+  status         String                   @default("active") // active, inactive, revoked
+  lastAccessedAt DateTime?
+  createdAt      DateTime                 @default(now())
 
   @@unique([licenseId, userId], name: "license_user_unique")
   @@index([licenseId])
@@ -96,42 +97,87 @@ model LicenseUser {
 }
 
 model LicenseAudit {
-  id              String    @id @default(uuid())
-  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  tenantId        String
-  licenseId       String?
-  action          String    // create, assign, revoke, renew, expire
-  details         String?   // JSON details of the action
-  performedBy     String?   // user ID who performed the action
-  createdAt       DateTime  @default(now())
+  id          String   @id @default(uuid())
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId    String
+  licenseId   String?
+  action      String // create, assign, revoke, renew, expire
+  details     String? // JSON details of the action
+  performedBy String? // user ID who performed the action
+  createdAt   DateTime @default(now())
 
   @@index([tenantId])
   @@index([createdAt])
 }
 
+// Platform Users - Users at platform level without tenant association
+model PlatformUser {
+  id                 String         @id @default(uuid())
+  email              String         @unique
+  passwordHash       String
+  displayName        String?
+  status             String         @default("active") // active, inactive, suspended, deleted
+  platformRoles      String[]       @default([]) // platform_admin, platform_moderator, etc.
+  welcomeEmailSent   Boolean        @default(false)
+  welcomeEmailSentAt DateTime?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  refreshTokens      RefreshToken[]
+  auditLogs          AuditLog[]
+}
+
+// Tenant Users - Users belonging to a specific tenant
+model TenantUser {
+  id                    String                 @id @default(uuid())
+  email                 String
+  passwordHash          String
+  displayName           String?
+  status                String                 @default("active") // active, inactive, suspended, deleted
+  tenantRoles           String[]               @default([]) // learner, trainer, tenant_admin, etc.
+  welcomeEmailSent      Boolean                @default(false)
+  welcomeEmailSentAt    DateTime?
+  tenant                Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId              String
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  refreshTokens         RefreshToken[]
+  userProgress          UserProgress[]
+  lessonProgress        LessonProgress[]
+  courseAssignments     CourseAssignment[]
+  liveClassParticipants LiveClassParticipant[]
+
+  @@unique([tenantId, email], name: "tenant_user_email_unique") // email unique per tenant
+  @@index([tenantId])
+  @@index([email])
+}
+
+// Kept for backward compatibility - maps to either PlatformUser or TenantUser
 model User {
-  id             String           @id @default(uuid())
-  email          String           @unique
-  passwordHash   String
-  displayName    String?
-  status         String           @default("active")
-  createdAt      DateTime         @default(now())
-  tenants        UserTenant[]
-  refreshTokens  RefreshToken[]
-  userProgress   UserProgress[]
-  lessonProgress LessonProgress[]
+  id                 String           @id @default(uuid())
+  email              String           @unique
+  passwordHash       String
+  displayName        String?
+  status             String           @default("active")
+  platformRoles      String[]         @default([])
+  welcomeEmailSent   Boolean          @default(false)
+  welcomeEmailSentAt DateTime?
+  createdAt          DateTime         @default(now())
+  tenants            UserTenant[]
+  refreshTokens      RefreshToken[]
+  userProgress       UserProgress[]
+  lessonProgress     LessonProgress[]
 }
 
 model UserTenant {
   id        String   @id @default(uuid())
-  user      User     @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   tenantId  String
   roles     String[] @default([])
   createdAt DateTime @default(now())
 
-  @@unique([userId, tenantId], name: "user_id_tenant_id") // <-- add this
+  @@unique([userId, tenantId], name: "user_id_tenant_id")
   @@index([tenantId])
   @@index([userId])
 }
@@ -140,14 +186,32 @@ model Role {
   id          String           @id @default(uuid())
   code        String           @unique
   name        String
+  description String? // Role description
+  category    String? // system, custom, predefined
+  isSystem    Boolean          @default(false) // System roles cannot be deleted
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime?        @updatedAt
   permissions RolePermission[]
+
+  @@index([category])
 }
 
 model Permission {
   id              String           @id @default(uuid())
-  code            String           @unique
+  code            String           @unique // format: resource.action (e.g., users.create, courses.edit, admin.manage)
   name            String
+  description     String? // Human-readable description
+  resource        String // users, courses, roles, admin, licenses, live-class, quiz, tenant, etc.
+  action          String // create, read, update, delete, manage, export, etc.
+  category        String // User Management, Content, Administration, Reporting, etc.
+  isSystemDefined Boolean          @default(true) // Cannot be deleted if true
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
   rolePermissions RolePermission[]
+
+  @@unique([resource, action], name: "resource_action_unique")
+  @@index([resource])
+  @@index([category])
 }
 
 model RolePermission {
@@ -210,20 +274,20 @@ model Lesson {
 }
 
 model Quiz {
-  id               String           @id @default(uuid())
-  lesson           Lesson           @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  id               String         @id @default(uuid())
+  lesson           Lesson         @relation(fields: [lessonId], references: [id], onDelete: Cascade)
   lessonId         String
   title            String
   description      String?
   instructions     String? // quiz instructions for learners
-  passingScore     Int              @default(70) // percentage needed to pass
-  attemptsAllowed  Int              @default(1) // number of attempts (-1 for unlimited)
+  passingScore     Int            @default(70) // percentage needed to pass
+  attemptsAllowed  Int            @default(1) // number of attempts (-1 for unlimited)
   timeLimit        Int? // time limit in seconds (null = no limit)
-  displayOrder     Int              @default(0)
-  shuffleQuestions Boolean          @default(false) // randomize question order
-  status           String           @default("draft") // draft, published, archived
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
+  displayOrder     Int            @default(0)
+  shuffleQuestions Boolean        @default(false) // randomize question order
+  status           String         @default("draft") // draft, published, archived
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
   questions        QuizQuestion[]
   attempts         QuizAttempt[]
 
@@ -231,16 +295,16 @@ model Quiz {
 }
 
 model QuizQuestion {
-  id           String   @id @default(uuid())
-  quiz         Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  id           String       @id @default(uuid())
+  quiz         Quiz         @relation(fields: [quizId], references: [id], onDelete: Cascade)
   quizId       String
-  type         String   @default("multiple_choice") // multiple_choice, true_false, short_answer
+  type         String       @default("multiple_choice") // multiple_choice, true_false, short_answer
   questionText String
   explanation  String? // explanation shown after answering
-  points       Int      @default(1) // points for this question
-  displayOrder Int      @default(0)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  points       Int          @default(1) // points for this question
+  displayOrder Int          @default(0)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
   options      QuizOption[]
   answers      QuizAnswer[]
 
@@ -248,45 +312,45 @@ model QuizQuestion {
 }
 
 model QuizOption {
-  id         String       @id @default(uuid())
-  question   QuizQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  questionId String
-  optionText String
-  isCorrect  Boolean      @default(false)
-  displayOrder Int        @default(0)
-  createdAt  DateTime     @default(now())
+  id           String       @id @default(uuid())
+  question     QuizQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  questionId   String
+  optionText   String
+  isCorrect    Boolean      @default(false)
+  displayOrder Int          @default(0)
+  createdAt    DateTime     @default(now())
 
   @@index([questionId])
 }
 
 model QuizAttempt {
-  id          String         @id @default(uuid())
-  quiz        Quiz           @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  id          String       @id @default(uuid())
+  quiz        Quiz         @relation(fields: [quizId], references: [id], onDelete: Cascade)
   quizId      String
   userId      String // user who attempted
   score       Int? // null until quiz is submitted
   percentage  Float? // percentage score
-  status      String         @default("in_progress") // in_progress, submitted, graded
-  startedAt   DateTime       @default(now())
+  status      String       @default("in_progress") // in_progress, submitted, graded
+  startedAt   DateTime     @default(now())
   completedAt DateTime?
-  createdAt   DateTime       @default(now())
+  createdAt   DateTime     @default(now())
   answers     QuizAnswer[]
 
+  @@unique([quizId, userId, createdAt])
   @@index([quizId])
   @@index([userId])
-  @@unique([quizId, userId, createdAt])
 }
 
 model QuizAnswer {
-  id            String       @id @default(uuid())
-  attempt       QuizAttempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
-  attemptId     String
-  question      QuizQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  questionId    String
+  id             String       @id @default(uuid())
+  attempt        QuizAttempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  attemptId      String
+  question       QuizQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  questionId     String
   selectedOption String? // selected option ID or short answer text
-  isCorrect     Boolean?
-  pointsEarned  Int?
-  createdAt     DateTime     @default(now())
+  isCorrect      Boolean?
+  pointsEarned   Int?
+  createdAt      DateTime     @default(now())
 
   @@index([attemptId])
   @@index([questionId])
@@ -317,36 +381,43 @@ model LiveClass {
 }
 
 model LiveClassParticipant {
-  id                    String    @id @default(uuid())
-  liveClass             LiveClass @relation(fields: [liveClassId], references: [id], onDelete: Cascade)
+  id                    String     @id @default(uuid())
+  liveClass             LiveClass  @relation(fields: [liveClassId], references: [id], onDelete: Cascade)
   liveClassId           String
-  userId                String // participant user ID
-  joinedAt              DateTime  @default(now())
+  tenantUser            TenantUser @relation(fields: [tenantUserId], references: [id], onDelete: Cascade)
+  tenantUserId          String
+  joinedAt              DateTime   @default(now())
   leftAt                DateTime?
-  role                  String    @default("participant") // teacher, participant
-  activeDurationSeconds Int       @default(0) // total active duration in seconds
-  activePercentage      Float     @default(0) // percentage of class duration user was active (0-100)
-  isCompleted           Boolean   @default(false) // true if activePercentage >= 80
+  role                  String     @default("participant") // teacher, participant
+  activeDurationSeconds Int        @default(0) // total active duration in seconds
+  activePercentage      Float      @default(0) // percentage of class duration user was active (0-100)
+  isCompleted           Boolean    @default(false) // true if activePercentage >= 80
   completedAt           DateTime? // when attendance was marked as complete
-  createdAt             DateTime  @default(now())
+  createdAt             DateTime   @default(now())
 
-  @@unique([liveClassId, userId])
+  @@unique([liveClassId, tenantUserId])
   @@index([liveClassId])
-  @@index([userId])
+  @@index([tenantUserId])
 }
 
 model RefreshToken {
-  id        String   @id @default(uuid())
-  user      User     @relation(fields: [userId], references: [id])
-  userId    String
-  tokenHash String
-  revoked   Boolean  @default(false)
-  createdAt DateTime @default(now())
-  expiresAt DateTime
-  ip        String?
-  ua        String?
+  id             String        @id @default(uuid())
+  user           User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId         String?
+  platformUser   PlatformUser? @relation(fields: [platformUserId], references: [id], onDelete: Cascade)
+  platformUserId String?
+  tenantUser     TenantUser?   @relation(fields: [tenantUserId], references: [id], onDelete: Cascade)
+  tenantUserId   String?
+  tokenHash      String
+  revoked        Boolean       @default(false)
+  createdAt      DateTime      @default(now())
+  expiresAt      DateTime
+  ip             String?
+  ua             String?
 
   @@index([userId])
+  @@index([platformUserId])
+  @@index([tenantUserId])
 }
 
 model CourseAssignment {
@@ -355,8 +426,9 @@ model CourseAssignment {
   tenantId     String
   course       Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
   courseId     String
-  assignedTo   String // user ID
-  assignedBy   String // admin/manager user ID
+  tenantUser   TenantUser     @relation(fields: [tenantUserId], references: [id], onDelete: Cascade)
+  tenantUserId String
+  assignedBy   String // tenant admin/manager user ID
   status       String         @default("assigned") // assigned, started, completed, expired
   dueDate      DateTime?
   assignedAt   DateTime       @default(now())
@@ -367,7 +439,7 @@ model CourseAssignment {
 
   @@index([tenantId])
   @@index([courseId])
-  @@index([assignedTo])
+  @@index([tenantUserId])
   @@index([status])
 }
 
@@ -377,6 +449,8 @@ model UserProgress {
   tenantId           String
   user               User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId             String
+  tenantUser         TenantUser       @relation(fields: [tenantUserId], references: [id], onDelete: Cascade)
+  tenantUserId       String
   course             Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
   courseId           String
   courseAssignment   CourseAssignment @relation(fields: [courseAssignmentId], references: [id], onDelete: Cascade)
@@ -393,8 +467,10 @@ model UserProgress {
   lessonProgress     LessonProgress[]
 
   @@unique([userId, courseId])
+  @@unique([tenantUserId, courseId])
   @@index([tenantId])
   @@index([userId])
+  @@index([tenantUserId])
   @@index([courseId])
   @@index([status])
 }
@@ -405,6 +481,8 @@ model LessonProgress {
   tenantId        String
   user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId          String
+  tenantUser      TenantUser   @relation(fields: [tenantUserId], references: [id], onDelete: Cascade)
+  tenantUserId    String
   lesson          Lesson       @relation(fields: [lessonId], references: [id], onDelete: Cascade)
   lessonId        String
   userProgress    UserProgress @relation(fields: [userProgressId], references: [id], onDelete: Cascade)
@@ -419,20 +497,28 @@ model LessonProgress {
   updatedAt       DateTime     @updatedAt
 
   @@unique([userId, lessonId])
+  @@unique([tenantUserId, lessonId])
   @@index([tenantId])
   @@index([userId])
+  @@index([tenantUserId])
   @@index([lessonId])
 }
 
 model AuditLog {
-  id          String   @id @default(uuid())
-  tenantId    String?
-  actorUserId String?
-  action      String
-  entity      String
-  entityId    String?
-  payload     String?
-  ip          String?
-  ua          String?
-  createdAt   DateTime @default(now())
+  id             String        @id @default(uuid())
+  tenantId       String?
+  actorUserId    String?
+  platformUser   PlatformUser? @relation(fields: [platformUserId], references: [id], onDelete: SetNull)
+  platformUserId String?
+  action         String
+  entity         String
+  entityId       String?
+  payload        String?
+  ip             String?
+  ua             String?
+  createdAt      DateTime      @default(now())
+
+  @@index([tenantId])
+  @@index([platformUserId])
+  @@index([createdAt])
 }

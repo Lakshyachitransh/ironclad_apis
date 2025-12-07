@@ -3,6 +3,7 @@
 ## Overview
 
 Complete quiz management system for LMS platform with support for:
+
 - Quiz CRUD operations (Create, Read, Update, Delete)
 - Question management (multiple choice, true/false, short answer)
 - Option management for questions
@@ -13,6 +14,7 @@ Complete quiz management system for LMS platform with support for:
 ## Database Models
 
 ### Quiz Model
+
 ```prisma
 model Quiz {
   id               String
@@ -35,6 +37,7 @@ model Quiz {
 ```
 
 ### QuizQuestion Model
+
 ```prisma
 model QuizQuestion {
   id           String
@@ -51,6 +54,7 @@ model QuizQuestion {
 ```
 
 ### QuizOption Model
+
 ```prisma
 model QuizOption {
   id           String
@@ -63,6 +67,7 @@ model QuizOption {
 ```
 
 ### QuizAttempt Model
+
 ```prisma
 model QuizAttempt {
   id          String
@@ -79,6 +84,7 @@ model QuizAttempt {
 ```
 
 ### QuizAnswer Model
+
 ```prisma
 model QuizAnswer {
   id            String
@@ -95,6 +101,7 @@ model QuizAnswer {
 ## API Endpoints
 
 ### Base URL
+
 ```
 POST/GET/PUT/DELETE /lessons/:lessonId/quizzes
 ```
@@ -104,11 +111,13 @@ POST/GET/PUT/DELETE /lessons/:lessonId/quizzes
 ## Quiz Management Endpoints
 
 ### 1. Create Quiz
+
 **POST** `/lessons/:lessonId/quizzes`
 
 **Authorization**: `training_manager`, `org_admin`
 
 **Request Body**:
+
 ```json
 {
   "title": "Module 1 Assessment",
@@ -122,6 +131,7 @@ POST/GET/PUT/DELETE /lessons/:lessonId/quizzes
 ```
 
 **Response** (201 Created):
+
 ```json
 {
   "id": "quiz_123",
@@ -143,11 +153,13 @@ POST/GET/PUT/DELETE /lessons/:lessonId/quizzes
 ---
 
 ### 2. Get All Quizzes for Lesson
+
 **GET** `/lessons/:lessonId/quizzes`
 
 **Authorization**: `training_manager`, `org_admin`, `learner`
 
 **Response** (200 OK):
+
 ```json
 [
   {
@@ -184,6 +196,7 @@ POST/GET/PUT/DELETE /lessons/:lessonId/quizzes
 ---
 
 ### 3. Get Quiz Details
+
 **GET** `/lessons/:lessonId/quizzes/:quizId`
 
 **Authorization**: `training_manager`, `org_admin`, `learner`
@@ -193,11 +206,13 @@ POST/GET/PUT/DELETE /lessons/:lessonId/quizzes
 ---
 
 ### 4. Update Quiz Settings
+
 **PUT** `/lessons/:lessonId/quizzes/:quizId`
 
 **Authorization**: `training_manager`, `org_admin`
 
 **Request Body**:
+
 ```json
 {
   "title": "Updated Title",
@@ -211,15 +226,18 @@ POST/GET/PUT/DELETE /lessons/:lessonId/quizzes
 ---
 
 ### 5. Publish Quiz
+
 **POST** `/lessons/:lessonId/quizzes/:quizId/publish`
 
 **Authorization**: `training_manager`, `org_admin`
 
-**Requirements**: 
+**Requirements**:
+
 - Quiz must have at least one question
 - Status changes from "draft" to "published"
 
 **Response** (200 OK):
+
 ```json
 {
   "id": "quiz_123",
@@ -229,6 +247,7 @@ POST/GET/PUT/DELETE /lessons/:lessonId/quizzes
 ```
 
 **Error** (400 Bad Request):
+
 ```json
 {
   "message": "Cannot publish quiz without questions"
@@ -238,6 +257,7 @@ POST/GET/PUT/DELETE /lessons/:lessonId/quizzes
 ---
 
 ### 6. Delete Quiz
+
 **DELETE** `/lessons/:lessonId/quizzes/:quizId`
 
 **Authorization**: `training_manager`, `org_admin`
@@ -249,11 +269,13 @@ POST/GET/PUT/DELETE /lessons/:lessonId/quizzes
 ## Question Management Endpoints
 
 ### 7. Add Question to Quiz
+
 **POST** `/lessons/:lessonId/quizzes/:quizId/questions`
 
 **Authorization**: `training_manager`, `org_admin`
 
 **Request Body**:
+
 ```json
 {
   "type": "multiple_choice",
@@ -264,11 +286,13 @@ POST/GET/PUT/DELETE /lessons/:lessonId/quizzes
 ```
 
 **Question Types**:
+
 - `multiple_choice` - Multiple choice questions
 - `true_false` - True/False questions
 - `short_answer` - Short answer questions (manual grading)
 
 **Response** (201 Created):
+
 ```json
 {
   "id": "q_1",
@@ -284,11 +308,13 @@ POST/GET/PUT/DELETE /lessons/:lessonId/quizzes
 ---
 
 ### 8. Update Question
+
 **PUT** `/lessons/:lessonId/quizzes/:quizId/questions/:questionId`
 
 **Authorization**: `training_manager`, `org_admin`
 
 **Request Body**:
+
 ```json
 {
   "questionText": "Updated question text",
@@ -301,6 +327,7 @@ POST/GET/PUT/DELETE /lessons/:lessonId/quizzes
 ---
 
 ### 9. Delete Question
+
 **DELETE** `/lessons/:lessonId/quizzes/:quizId/questions/:questionId`
 
 **Authorization**: `training_manager`, `org_admin`
@@ -312,11 +339,13 @@ POST/GET/PUT/DELETE /lessons/:lessonId/quizzes
 ## Option Management Endpoints
 
 ### 10. Add Option to Question
+
 **POST** `/lessons/:lessonId/quizzes/:quizId/questions/:questionId/options`
 
 **Authorization**: `training_manager`, `org_admin`
 
 **Request Body**:
+
 ```json
 {
   "optionText": "Paris",
@@ -325,6 +354,7 @@ POST/GET/PUT/DELETE /lessons/:lessonId/quizzes
 ```
 
 **Response** (201 Created):
+
 ```json
 {
   "id": "opt_1",
@@ -338,11 +368,13 @@ POST/GET/PUT/DELETE /lessons/:lessonId/quizzes
 ---
 
 ### 11. Update Option
+
 **PUT** `/lessons/:lessonId/quizzes/:quizId/questions/:questionId/options/:optionId`
 
 **Authorization**: `training_manager`, `org_admin`
 
 **Request Body**:
+
 ```json
 {
   "optionText": "Paris, France",
@@ -355,6 +387,7 @@ POST/GET/PUT/DELETE /lessons/:lessonId/quizzes
 ---
 
 ### 12. Delete Option
+
 **DELETE** `/lessons/:lessonId/quizzes/:quizId/questions/:questionId/options/:optionId`
 
 **Authorization**: `training_manager`, `org_admin`
@@ -366,16 +399,19 @@ POST/GET/PUT/DELETE /lessons/:lessonId/quizzes
 ## Quiz Attempt Endpoints
 
 ### 13. Start Quiz Attempt
+
 **POST** `/lessons/:lessonId/quizzes/:quizId/start`
 
 **Authorization**: `learner`
 
 **Requirements**:
+
 - Quiz must be published
 - User must not have exceeded maximum attempts
 - Automatically creates a `QuizAttempt` record
 
 **Response** (201 Created):
+
 ```json
 {
   "id": "attempt_1",
@@ -412,6 +448,7 @@ POST/GET/PUT/DELETE /lessons/:lessonId/quizzes
 ```
 
 **Error** (400 Bad Request):
+
 ```json
 {
   "message": "Maximum attempts (2) reached"
@@ -421,6 +458,7 @@ POST/GET/PUT/DELETE /lessons/:lessonId/quizzes
 ---
 
 ### 14. Get Attempt Details
+
 **GET** `/lessons/:lessonId/quizzes/:quizId/attempts/:attemptId`
 
 **Authorization**: `learner`, `training_manager`, `org_admin`
@@ -430,11 +468,13 @@ POST/GET/PUT/DELETE /lessons/:lessonId/quizzes
 ---
 
 ### 15. Submit Answer to Question
+
 **POST** `/lessons/:lessonId/quizzes/:quizId/attempts/:attemptId/answers`
 
 **Authorization**: `learner`
 
 **Request Body**:
+
 ```json
 {
   "questionId": "q_1",
@@ -443,6 +483,7 @@ POST/GET/PUT/DELETE /lessons/:lessonId/quizzes
 ```
 
 **Response** (201 Created):
+
 ```json
 {
   "id": "answer_1",
@@ -455,6 +496,7 @@ POST/GET/PUT/DELETE /lessons/:lessonId/quizzes
 ```
 
 **Automatic Grading Logic**:
+
 - **Multiple Choice**: Compares selectedOption ID with correct option
 - **True/False**: Evaluates boolean value against correct answer
 - **Short Answer**: Marks as null, requires manual grading
@@ -462,17 +504,20 @@ POST/GET/PUT/DELETE /lessons/:lessonId/quizzes
 ---
 
 ### 16. Submit Quiz (Calculate Score)
+
 **POST** `/lessons/:lessonId/quizzes/:quizId/attempts/:attemptId/submit`
 
 **Authorization**: `learner`
 
 **Calculation**:
+
 - Sums pointsEarned from all QuizAnswers
-- Calculates percentage: (earnedPoints / totalPoints) * 100
+- Calculates percentage: (earnedPoints / totalPoints) \* 100
 - Changes status to "submitted"
 - Records completion timestamp
 
 **Response** (200 OK):
+
 ```json
 {
   "id": "attempt_1",
@@ -505,11 +550,13 @@ POST/GET/PUT/DELETE /lessons/:lessonId/quizzes
 ---
 
 ### 17. Get My Quiz Attempts
+
 **GET** `/lessons/:lessonId/quizzes/:quizId/my-attempts`
 
 **Authorization**: `learner`
 
 **Response** (200 OK): Array of user's attempts (newest first)
+
 ```json
 [
   {
@@ -538,11 +585,13 @@ POST/GET/PUT/DELETE /lessons/:lessonId/quizzes
 ---
 
 ### 18. Get Quiz Results (Admin View)
+
 **GET** `/lessons/:lessonId/quizzes/:quizId/results`
 
 **Authorization**: `training_manager`, `org_admin`
 
 **Response** (200 OK): All quiz attempts from all users
+
 ```json
 [
   {
@@ -573,6 +622,7 @@ POST/GET/PUT/DELETE /lessons/:lessonId/quizzes
 ## Data Transfer Objects (DTOs)
 
 ### CreateQuizDto
+
 ```typescript
 {
   title: string;
@@ -586,6 +636,7 @@ POST/GET/PUT/DELETE /lessons/:lessonId/quizzes
 ```
 
 ### CreateQuizQuestionDto
+
 ```typescript
 {
   type: string;                    // 'multiple_choice' | 'true_false' | 'short_answer'
@@ -596,6 +647,7 @@ POST/GET/PUT/DELETE /lessons/:lessonId/quizzes
 ```
 
 ### CreateQuizOptionDto
+
 ```typescript
 {
   optionText: string;
@@ -604,10 +656,11 @@ POST/GET/PUT/DELETE /lessons/:lessonId/quizzes
 ```
 
 ### SubmitQuizAnswerDto
+
 ```typescript
 {
   questionId: string;
-  selectedOption: string;          // ID of selected option or boolean/text value
+  selectedOption: string; // ID of selected option or boolean/text value
 }
 ```
 
@@ -617,16 +670,17 @@ POST/GET/PUT/DELETE /lessons/:lessonId/quizzes
 
 ### Common HTTP Status Codes
 
-| Status | Meaning | Example |
-|--------|---------|---------|
-| 201 | Created successfully | Quiz, question, option created |
-| 200 | OK | Successful GET/PUT/DELETE |
-| 400 | Bad Request | Invalid input, can't publish empty quiz |
-| 403 | Forbidden | Insufficient permissions |
-| 404 | Not Found | Quiz/question/attempt not found |
-| 500 | Server Error | Database/server issues |
+| Status | Meaning              | Example                                 |
+| ------ | -------------------- | --------------------------------------- |
+| 201    | Created successfully | Quiz, question, option created          |
+| 200    | OK                   | Successful GET/PUT/DELETE               |
+| 400    | Bad Request          | Invalid input, can't publish empty quiz |
+| 403    | Forbidden            | Insufficient permissions                |
+| 404    | Not Found            | Quiz/question/attempt not found         |
+| 500    | Server Error         | Database/server issues                  |
 
 ### Error Response Format
+
 ```json
 {
   "statusCode": 400,
@@ -641,24 +695,25 @@ POST/GET/PUT/DELETE /lessons/:lessonId/quizzes
 
 ### Role Permissions
 
-| Endpoint | Learner | Training Manager | Org Admin |
-|----------|---------|------------------|-----------|
-| Create Quiz | ✗ | ✓ | ✓ |
-| Get Quizzes | ✓ | ✓ | ✓ |
-| Update Quiz | ✗ | ✓ | ✓ |
-| Publish Quiz | ✗ | ✓ | ✓ |
-| Delete Quiz | ✗ | ✓ | ✓ |
-| Add/Update Questions | ✗ | ✓ | ✓ |
-| Start Attempt | ✓ | ✗ | ✗ |
-| Submit Answers | ✓ | ✗ | ✗ |
-| View My Attempts | ✓ | ✗ | ✗ |
-| View All Results | ✗ | ✓ | ✓ |
+| Endpoint             | Learner | Training Manager | Org Admin |
+| -------------------- | ------- | ---------------- | --------- |
+| Create Quiz          | ✗       | ✓                | ✓         |
+| Get Quizzes          | ✓       | ✓                | ✓         |
+| Update Quiz          | ✗       | ✓                | ✓         |
+| Publish Quiz         | ✗       | ✓                | ✓         |
+| Delete Quiz          | ✗       | ✓                | ✓         |
+| Add/Update Questions | ✗       | ✓                | ✓         |
+| Start Attempt        | ✓       | ✗                | ✗         |
+| Submit Answers       | ✓       | ✗                | ✗         |
+| View My Attempts     | ✓       | ✗                | ✗         |
+| View All Results     | ✗       | ✓                | ✓         |
 
 ---
 
 ## Complete Example: Creating and Completing a Quiz
 
 ### Step 1: Create Quiz (Trainer)
+
 ```bash
 POST /lessons/lesson_456/quizzes
 Authorization: Bearer <trainer_token>
@@ -673,6 +728,7 @@ Authorization: Bearer <trainer_token>
 ```
 
 ### Step 2: Add Question (Trainer)
+
 ```bash
 POST /lessons/lesson_456/quizzes/quiz_123/questions
 Authorization: Bearer <trainer_token>
@@ -686,6 +742,7 @@ Authorization: Bearer <trainer_token>
 ```
 
 ### Step 3: Add Options (Trainer)
+
 ```bash
 POST /lessons/lesson_456/quizzes/quiz_123/questions/q_1/options
 Authorization: Bearer <trainer_token>
@@ -707,12 +764,14 @@ Authorization: Bearer <trainer_token>
 ```
 
 ### Step 4: Publish Quiz (Trainer)
+
 ```bash
 POST /lessons/lesson_456/quizzes/quiz_123/publish
 Authorization: Bearer <trainer_token>
 ```
 
 ### Step 5: Start Attempt (Learner)
+
 ```bash
 POST /lessons/lesson_456/quizzes/quiz_123/start
 Authorization: Bearer <learner_token>
@@ -721,6 +780,7 @@ Response: attempt_1 with all questions
 ```
 
 ### Step 6: Submit Answer (Learner)
+
 ```bash
 POST /lessons/lesson_456/quizzes/quiz_123/attempts/attempt_1/answers
 Authorization: Bearer <learner_token>
@@ -732,6 +792,7 @@ Authorization: Bearer <learner_token>
 ```
 
 ### Step 7: Submit Quiz (Learner)
+
 ```bash
 POST /lessons/lesson_456/quizzes/quiz_123/attempts/attempt_1/submit
 Authorization: Bearer <learner_token>
@@ -740,6 +801,7 @@ Response: attempt_1 with score=1, percentage=100
 ```
 
 ### Step 8: View Results (Trainer)
+
 ```bash
 GET /lessons/lesson_456/quizzes/quiz_123/results
 Authorization: Bearer <trainer_token>
@@ -779,15 +841,17 @@ Response: All attempts with learner scores
 **Commit Hash**: 0ffe521  
 **Date**: 2025-01-26  
 **Files Changed**: 6  
-**Insertions**: 870+  
+**Insertions**: 870+
 
 **Files Added**:
+
 - `src/courses/quizzes.service.ts` - Quiz business logic
 - `src/courses/quizzes.controller.ts` - Quiz API endpoints
 - `src/courses/dto/quizzes.dto.ts` - Data transfer objects
 - `prisma/migrations/20251126120956_add_quiz_models/migration.sql` - Database migration
 
 **Files Modified**:
+
 - `src/courses/courses.module.ts` - Added QuizzesService and QuizzesController
 - `prisma/schema.prisma` - Added 5 new models (Quiz, QuizQuestion, QuizOption, QuizAttempt, QuizAnswer)
 

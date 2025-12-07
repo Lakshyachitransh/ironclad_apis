@@ -5,6 +5,8 @@ import { CreateRoleDto } from './dto/create-role.dto';
 import { CreatePermissionDto } from './dto/create-permission.dto';
 import { AssignRoleDto } from './dto/assign-role.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { PermissionGuard } from '../common/guards/permission.guard';
+import { RequirePermission } from '../common/decorators/require-permission.decorator';
 
 @ApiTags('roles')
 @ApiBearerAuth('access-token')
@@ -12,9 +14,10 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 export class RolesController {
   constructor(private svc: RolesService) {}
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('roles.create')
   @Post()
-  @ApiOperation({ summary: 'Create a new role (admin only)' })
+  @ApiOperation({ summary: 'Create a new role (requires roles.create permission)' })
   @ApiBody({ 
     schema: {
       example: {
@@ -39,9 +42,10 @@ export class RolesController {
     return this.svc.createRole(dto.code, dto.name, dto.description);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('roles.read')
   @Get()
-  @ApiOperation({ summary: 'List all available roles' })
+  @ApiOperation({ summary: 'List all available roles (requires roles.read permission)' })
   @ApiResponse({ 
     status: 200, 
     description: 'List of roles',
@@ -64,9 +68,10 @@ export class RolesController {
     return this.svc.getRoles();
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('permissions.create')
   @Post('permission')
-  @ApiOperation({ summary: 'Create a new permission' })
+  @ApiOperation({ summary: 'Create a new permission (requires permissions.create permission)' })
   @ApiBody({ 
     schema: {
       example: {
@@ -80,18 +85,26 @@ export class RolesController {
     description: 'Permission created successfully'
   })
   createPermission(@Body() dto: CreatePermissionDto) {
-    return this.svc.createPermission(dto.id, dto.description);
+    const code = dto.code || dto.id || 'custom.permission';
+    const name = dto.name || dto.description || code;
+    const resource = dto.resource || 'custom';
+    const action = dto.action || 'manage';
+    const category = dto.category || 'Custom';
+
+    return this.svc.createPermission(code, name, resource, action, category);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('roles.assign-permission')
   @Post('assign-permission')
-  @ApiOperation({ summary: 'Assign a permission to a role' })
+  @ApiOperation({ summary: 'Assign a permission to a role (requires roles.assign-permission permission)' })
   @ApiBody({ 
     schema: {
       example: {
         roleCode: 'training_manager',
-        permissionId: 'create_course'
-      }
+        permissionId: 'users.create'
+      },
+      description: 'Can use permission code (e.g., "users.create") or permission UUID (e.g., "5deb5f91-9a89-4f8a-a733-1fe947043aed")'
     }
   })
   @ApiResponse({ 
@@ -122,9 +135,47 @@ export class RolesController {
     return this.svc.assignRolesToUserTenant(dto.userId, dto.tenantId, dto.roles);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('roles.assign-permission')
+  @Post('assign-permissions-by-category')
+  @ApiOperation({ summary: 'Assign all permissions of a category to a role (requires roles.assign-permission permission)' })
+  @ApiBody({ 
+    schema: {
+      example: {
+        roleCode: 'training_manager',
+        category: 'courses'
+      },
+      description: 'Available categories: users, roles, courses, modules, lessons, content, quizzes, live-class, licenses, admin, tenants, permissions, reports, attendance, analytics, progress'
+    }
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'All permissions in category assigned to role',
+    schema: {
+      example: {
+        roleCode: 'training_manager',
+        category: 'courses',
+        assignedCount: 7,
+        permissions: [
+          { code: 'courses.create', name: 'Create Course' },
+          { code: 'courses.read', name: 'View Courses' },
+          { code: 'courses.update', name: 'Update Course' },
+          { code: 'courses.delete', name: 'Delete Course' },
+          { code: 'courses.publish', name: 'Publish Course' },
+          { code: 'courses.assign', name: 'Assign Course' },
+          { code: 'courses.export', name: 'Export Course' }
+        ]
+      }
+    }
+  })
+  assignPermissionsByCategory(@Body() body: { roleCode: string; category: string }) {
+    return this.svc.assignPermissionsByCategory(body.roleCode, body.category);
+  }
+
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('roles.read')
   @Get(':roleCode/permissions')
-  @ApiOperation({ summary: 'Get all permissions for a role' })
+  @ApiOperation({ summary: 'Get all permissions for a role (requires roles.read permission)' })
   @ApiParam({ name: 'roleCode', type: String, description: 'Role code' })
   @ApiResponse({ 
     status: 200, 

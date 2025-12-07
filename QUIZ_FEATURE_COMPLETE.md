@@ -7,6 +7,7 @@ Your LMS backend now has **AI-powered quiz generation** that automatically creat
 ## 📦 What Was Built
 
 ### Core Components
+
 - **QuizGeneratorService** - OpenAI integration for AI quiz generation
 - **3 New API Endpoints** - Generate, list, and retrieve quizzes
 - **Role-Based Security** - training_manager and instructor can generate
@@ -14,6 +15,7 @@ Your LMS backend now has **AI-powered quiz generation** that automatically creat
 - **Comprehensive Documentation** - 2 guides + Swagger API docs
 
 ### Key Features
+
 ✅ Generates exactly 6 quizzes per video  
 ✅ Each quiz has 4 multiple-choice options  
 ✅ Mix of difficulty levels (easy/medium/hard)  
@@ -21,11 +23,12 @@ Your LMS backend now has **AI-powered quiz generation** that automatically creat
 ✅ JSON validation and error handling  
 ✅ Database persistence with relationships  
 ✅ JWT authentication + role-based access  
-✅ 0 TypeScript errors, production-ready  
+✅ 0 TypeScript errors, production-ready
 
 ## 🚀 Quick Start
 
 ### 1. Generate Quizzes from Video
+
 ```bash
 curl -X POST http://localhost:3000/api/courses/lessons/les-001/generate-quizzes \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
@@ -38,12 +41,14 @@ curl -X POST http://localhost:3000/api/courses/lessons/les-001/generate-quizzes 
 ```
 
 ### 2. List Generated Quizzes
+
 ```bash
 curl -X GET http://localhost:3000/api/courses/lessons/les-001/quizzes \
   -H "Authorization: Bearer YOUR_JWT_TOKEN"
 ```
 
 ### 3. Get Quiz Details
+
 ```bash
 curl -X GET http://localhost:3000/api/courses/quizzes/quiz-1 \
   -H "Authorization: Bearer YOUR_JWT_TOKEN"
@@ -51,11 +56,11 @@ curl -X GET http://localhost:3000/api/courses/quizzes/quiz-1 \
 
 ## 📚 Documentation
 
-| Document | Purpose |
-|----------|---------|
-| **QUIZ_GENERATION_GUIDE.md** | Complete technical guide with architecture, setup, and examples |
-| **QUIZ_API_QUICK_REFERENCE.md** | Quick reference for developers with cURL and PowerShell examples |
-| **PHASE_3_COMPLETION_SUMMARY.md** | Implementation summary and validation checklist |
+| Document                          | Purpose                                                          |
+| --------------------------------- | ---------------------------------------------------------------- |
+| **QUIZ_GENERATION_GUIDE.md**      | Complete technical guide with architecture, setup, and examples  |
+| **QUIZ_API_QUICK_REFERENCE.md**   | Quick reference for developers with cURL and PowerShell examples |
+| **PHASE_3_COMPLETION_SUMMARY.md** | Implementation summary and validation checklist                  |
 
 ## 🔒 Security Features
 
@@ -75,29 +80,32 @@ curl -X GET http://localhost:3000/api/courses/quizzes/quiz-1 \
 
 ## 📊 Implementation Stats
 
-| Metric | Value |
-|--------|-------|
-| New Files | 2 (service + DTOs) |
-| Modified Files | 3 (controller + service + module) |
-| Lines of Code Added | ~2,000 |
-| TypeScript Errors | 0 |
-| API Endpoints | 3 |
-| Build Status | ✅ SUCCESS |
-| Git Commits | 3 |
+| Metric              | Value                             |
+| ------------------- | --------------------------------- |
+| New Files           | 2 (service + DTOs)                |
+| Modified Files      | 3 (controller + service + module) |
+| Lines of Code Added | ~2,000                            |
+| TypeScript Errors   | 0                                 |
+| API Endpoints       | 3                                 |
+| Build Status        | ✅ SUCCESS                        |
+| Git Commits         | 3                                 |
 
 ## 🔍 API Endpoints
 
 ### POST /api/courses/lessons/:lessonId/generate-quizzes
+
 - **Role**: training_manager, instructor
 - **Returns**: 6 auto-generated quizzes with questions and options
 - **Status**: 201 Created
 
 ### GET /api/courses/lessons/:lessonId/quizzes
+
 - **Role**: Any authenticated user
 - **Returns**: List of all quizzes for the lesson
 - **Status**: 200 OK
 
 ### GET /api/courses/quizzes/:quizId
+
 - **Role**: Any authenticated user
 - **Returns**: Full quiz with all questions and options
 - **Status**: 200 OK
@@ -105,6 +113,7 @@ curl -X GET http://localhost:3000/api/courses/quizzes/quiz-1 \
 ## 🗄️ Database Models
 
 All quiz models already exist in schema:
+
 - `Quiz` - Quiz container with metadata
 - `QuizQuestion` - Individual questions with explanations
 - `QuizOption` - Answer options (4 per question)
@@ -127,11 +136,13 @@ All quiz models already exist in schema:
 ## ⚙️ Environment Setup
 
 ### Required Variable
+
 ```bash
 export OPENAI_API_KEY=sk-your-openai-api-key-here
 ```
 
 ### Installed Package
+
 ```bash
 npm install openai  # Already done, 1 new package
 ```
@@ -139,18 +150,21 @@ npm install openai  # Already done, 1 new package
 ## 🧪 Testing
 
 ### Compile Check
+
 ```bash
 npm run build
 # Result: 0 errors ✅
 ```
 
 ### Dev Server
+
 ```bash
 npm run start:dev
 # Result: Watching for file changes ✅
 ```
 
 ### Swagger Documentation
+
 ```
 http://localhost:3000/api/docs
 # View all endpoints with examples
@@ -176,10 +190,10 @@ http://localhost:3000/api/docs
       "explanation": "JavaScript is used to add interactivity to web pages.",
       "order": 1,
       "options": [
-        {"id": "opt-1", "optionText": "Styling web pages", "order": 0},
-        {"id": "opt-2", "optionText": "Adding interactivity", "order": 1},
-        {"id": "opt-3", "optionText": "Creating databases", "order": 2},
-        {"id": "opt-4", "optionText": "Managing servers", "order": 3}
+        { "id": "opt-1", "optionText": "Styling web pages", "order": 0 },
+        { "id": "opt-2", "optionText": "Adding interactivity", "order": 1 },
+        { "id": "opt-3", "optionText": "Creating databases", "order": 2 },
+        { "id": "opt-4", "optionText": "Managing servers", "order": 3 }
       ]
     }
   ],
@@ -192,6 +206,7 @@ http://localhost:3000/api/docs
 ## 🔗 GitHub
 
 **Latest Commits:**
+
 - `83a9376` - docs: Add Phase 3 completion summary
 - `d780a5b` - docs: Add comprehensive AI quiz generation documentation
 - `b346466` - feat: Add AI-powered quiz generation from video content
@@ -201,6 +216,7 @@ http://localhost:3000/api/docs
 ## 🎓 Next Steps
 
 Recommended features to implement:
+
 1. **Quiz Submission** - POST endpoint for student attempts and scoring
 2. **Analytics** - Student performance metrics and insights
 3. **Quiz Regeneration** - Regenerate quizzes for same lesson
@@ -210,6 +226,7 @@ Recommended features to implement:
 ## 📞 Support
 
 For questions or issues:
+
 - Check **QUIZ_GENERATION_GUIDE.md** for detailed documentation
 - See **QUIZ_API_QUICK_REFERENCE.md** for examples
 - Review **PHASE_3_COMPLETION_SUMMARY.md** for implementation details

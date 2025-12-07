@@ -9,6 +9,7 @@ Successfully refactored all endpoints to use **proper Role-Based Access Control 
 ### 1. AdminController Refactoring
 
 **Before (❌ Incorrect):**
+
 ```typescript
 @UseGuards(JwtAuthGuard, OrgAdminGuard)
 export class AdminController {
@@ -18,6 +19,7 @@ export class AdminController {
 ```
 
 **After (✅ Correct):**
+
 ```typescript
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class AdminController {
@@ -69,15 +71,15 @@ viewer
 
 ### 3. Files Created/Modified
 
-| File | Status | Description |
-|------|--------|-------------|
-| `src/admin/admin.controller.ts` | ✏️ Modified | Replaced OrgAdminGuard with RolesGuard + @Roles |
-| `prisma/seed-rbac.ts` | ✨ Created | Comprehensive seed script (6 roles, 19 permissions) |
-| `prisma/clean-rbac.ts` | ✨ Created | Safe cleanup script for RBAC tables |
-| `prisma/clean-rbac.sql` | ✨ Created | SQL alternative for manual cleanup |
-| `package.json` | ✏️ Modified | Added rbac npm scripts |
-| `RBAC_IMPLEMENTATION.md` | ✨ Created | Detailed technical documentation |
-| `RBAC_QUICK_REFERENCE.md` | ✨ Created | Quick reference guide for developers |
+| File                            | Status      | Description                                         |
+| ------------------------------- | ----------- | --------------------------------------------------- |
+| `src/admin/admin.controller.ts` | ✏️ Modified | Replaced OrgAdminGuard with RolesGuard + @Roles     |
+| `prisma/seed-rbac.ts`           | ✨ Created  | Comprehensive seed script (6 roles, 19 permissions) |
+| `prisma/clean-rbac.ts`          | ✨ Created  | Safe cleanup script for RBAC tables                 |
+| `prisma/clean-rbac.sql`         | ✨ Created  | SQL alternative for manual cleanup                  |
+| `package.json`                  | ✏️ Modified | Added rbac npm scripts                              |
+| `RBAC_IMPLEMENTATION.md`        | ✨ Created  | Detailed technical documentation                    |
+| `RBAC_QUICK_REFERENCE.md`       | ✨ Created  | Quick reference guide for developers                |
 
 ## Admin Endpoints Now Protected with @Roles('org_admin')
 
@@ -129,6 +131,7 @@ All 7 endpoints now require `org_admin` role:
 ## Usage Examples
 
 ### Initialize RBAC
+
 ```bash
 npm run rbac:reset          # Clean + seed
 npm run rbac:seed           # Just seed
@@ -136,6 +139,7 @@ npm run rbac:clean          # Just clean
 ```
 
 ### Add New Endpoint with Role Protection
+
 ```typescript
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('training_manager')
@@ -144,6 +148,7 @@ createCourse() { ... }
 ```
 
 ### Assign Role to User
+
 ```bash
 POST /api/roles/assign-role
 {
@@ -154,6 +159,7 @@ POST /api/roles/assign-role
 ```
 
 ### Check User Permissions
+
 ```bash
 GET /api/roles/org_admin/permissions
 ```
@@ -161,6 +167,7 @@ GET /api/roles/org_admin/permissions
 ## Database Operations
 
 ### Clean RBAC Tables
+
 ```sql
 DELETE FROM "RolePermission";
 DELETE FROM "Permission";
@@ -168,6 +175,7 @@ DELETE FROM "Role";
 ```
 
 ### Verify Structure
+
 ```sql
 SELECT COUNT(*) FROM "Role";              -- Should be 0 after clean
 SELECT COUNT(*) FROM "Permission";         -- Should be 0 after clean
@@ -175,6 +183,7 @@ SELECT COUNT(*) FROM "RolePermission";     -- Should be 0 after clean
 ```
 
 ### After Seed
+
 ```sql
 SELECT COUNT(*) FROM "Role";              -- 6
 SELECT COUNT(*) FROM "Permission";         -- 19
@@ -218,21 +227,25 @@ SELECT COUNT(*) FROM "RolePermission";     -- ~72
 ## Deployment Steps
 
 1. **Pull latest code**
+
    ```bash
    git pull origin main
    ```
 
 2. **Install dependencies**
+
    ```bash
    npm install
    ```
 
 3. **Build project**
+
    ```bash
    npm run build
    ```
 
 4. **Seed RBAC data** (first time only)
+
    ```bash
    npm run rbac:seed
    ```
@@ -245,15 +258,19 @@ SELECT COUNT(*) FROM "RolePermission";     -- ~72
 ## Troubleshooting
 
 ### Issue: "Access denied. Required roles: org_admin"
+
 **Solution**: Ensure user has org_admin role via `/api/roles/assign-role`
 
 ### Issue: "User not found in request"
+
 **Solution**: Include JWT token in Authorization header
 
 ### Issue: Seed script fails
+
 **Solution**: Ensure database is running and DATABASE_URL is set correctly
 
 ### Issue: EADDRINUSE port 3000
+
 **Solution**: Kill existing process or change PORT env variable
 
 ## Documentation Files

@@ -66,6 +66,7 @@ npm install openai@latest
 **Role Requirements:** `training_manager` or `instructor`
 
 **Request Body:**
+
 ```json
 {
   "videoContent": "Your video transcript or content here...",
@@ -75,12 +76,14 @@ npm install openai@latest
 ```
 
 **Video Content Formats Supported:**
+
 - Raw video transcripts
 - Lesson summaries
 - Video descriptions
 - Course notes
 
 **Response (201 Created):**
+
 ```json
 {
   "quizzes": [
@@ -111,7 +114,7 @@ npm install openai@latest
           "order": 3
         }
       ]
-    },
+    }
     // ... 5 more quizzes
   ],
   "generatedAt": "2025-11-27T10:30:00Z",
@@ -121,6 +124,7 @@ npm install openai@latest
 ```
 
 **Error Responses:**
+
 - `400 Bad Request` - Missing or invalid video content
 - `401 Unauthorized` - Missing or invalid authentication token
 - `403 Forbidden` - Insufficient permissions
@@ -136,6 +140,7 @@ npm install openai@latest
 **Role Requirements:** Any authenticated user
 
 **Response (200 OK):**
+
 ```json
 [
   {
@@ -166,6 +171,7 @@ npm install openai@latest
 **Role Requirements:** Any authenticated user
 
 **Response (200 OK):**
+
 ```json
 {
   "id": "quiz-1",
@@ -223,6 +229,7 @@ npm install openai@latest
 ### Database Schema
 
 **Quiz Model:**
+
 - `id` (UUID)
 - `lessonId` (Foreign Key)
 - `title` (String)
@@ -233,6 +240,7 @@ npm install openai@latest
 - `updatedAt` (DateTime)
 
 **QuizQuestion Model:**
+
 - `id` (UUID)
 - `quizId` (Foreign Key)
 - `questionText` (String)
@@ -242,6 +250,7 @@ npm install openai@latest
 - `points` (Integer, default: 1)
 
 **QuizOption Model:**
+
 - `id` (UUID)
 - `questionId` (Foreign Key)
 - `optionText` (String)
@@ -249,6 +258,7 @@ npm install openai@latest
 - `displayOrder` (Integer)
 
 **QuizAttempt Model:**
+
 - `id` (UUID)
 - `quizId` (Foreign Key)
 - `userId` (String)
@@ -329,6 +339,7 @@ curl -X GET http://localhost:3000/api/courses/quizzes/quiz-1 \
 ### Recommendations
 
 1. **Implement Quiz Generation Caching:**
+
    ```typescript
    // Check if quizzes already exist for lesson
    const existingQuizzes = await getQuizzesForLesson(lessonId);
@@ -349,27 +360,30 @@ curl -X GET http://localhost:3000/api/courses/quizzes/quiz-1 \
 
 ### Common Errors
 
-| Error | Cause | Solution |
-|-------|-------|----------|
-| 400 - Invalid video content | Empty or missing content | Provide non-empty video transcript |
-| 401 - Unauthorized | Missing/invalid token | Include valid Bearer token |
-| 403 - Forbidden | Insufficient role | User needs `training_manager` role |
-| 404 - Not found | Lesson doesn't exist | Verify correct lessonId |
-| 500 - OpenAI API error | API key invalid or quota exceeded | Check OPENAI_API_KEY env var |
+| Error                       | Cause                             | Solution                           |
+| --------------------------- | --------------------------------- | ---------------------------------- |
+| 400 - Invalid video content | Empty or missing content          | Provide non-empty video transcript |
+| 401 - Unauthorized          | Missing/invalid token             | Include valid Bearer token         |
+| 403 - Forbidden             | Insufficient role                 | User needs `training_manager` role |
+| 404 - Not found             | Lesson doesn't exist              | Verify correct lessonId            |
+| 500 - OpenAI API error      | API key invalid or quota exceeded | Check OPENAI_API_KEY env var       |
 
 ### OpenAI Specific Issues
 
 **No API Key:**
+
 ```
 Error: The OPENAI_API_KEY environment variable is not set
 ```
 
 **Quota Exceeded:**
+
 ```
 Error: Rate limit exceeded
 ```
 
 **Invalid Model:**
+
 ```
 Error: The model gpt-4-turbo-preview does not exist
 ```
@@ -400,7 +414,7 @@ async generateShortAnswerQuestions(videoContent: string) {
 async generateQuizzesForCourse(courseId: string) {
   const lessons = await getLessonsForCourse(courseId);
   const results = await Promise.all(
-    lessons.map(lesson => 
+    lessons.map(lesson =>
       generateQuizzesFromVideo(lesson.id, lesson.transcript)
     )
   );
@@ -468,11 +482,13 @@ QUIZ_MAX_RETRIES=3
 ### Quiz Generation Fails
 
 1. **Check OpenAI API Key:**
+
    ```bash
    echo $OPENAI_API_KEY
    ```
 
 2. **Check Logs:**
+
    ```bash
    npm run start:dev
    # Look for errors in console
@@ -486,12 +502,14 @@ QUIZ_MAX_RETRIES=3
 ### Quizzes Not Appearing
 
 1. **Check Lesson Exists:**
+
    ```bash
    # Query database
    SELECT * FROM "Lesson" WHERE id = 'les-001';
    ```
 
 2. **Check Quiz Records:**
+
    ```bash
    SELECT * FROM "Quiz" WHERE lessonId = 'les-001';
    ```

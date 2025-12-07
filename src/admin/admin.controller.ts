@@ -1,18 +1,19 @@
-import { Controller, Post, Get, Body, UseGuards, HttpCode, HttpStatus, Param, Query } from '@nestjs/common';
+import { Controller, Post, Get, Body, UseGuards, HttpCode, HttpStatus, Param, Query, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import { RolesGuard } from '../roles/roles.guard';
-import { Roles } from '../roles/roles.decorator';
+import { PermissionGuard } from '../common/guards/permission.guard';
+import { RequirePermission } from '../common/decorators/require-permission.decorator';
+import { CreateTenantAdminDto } from './dto/create-tenant-admin.dto';
 
 @ApiTags('admin')
 @ApiBearerAuth('access-token')
 @Controller('admin')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, PermissionGuard)
 export class AdminController {
   constructor(private adminService: AdminService) {}
 
-  @Roles('org_admin')
+  @RequirePermission('admin.manage')
   @Post('database/update-config')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -66,7 +67,7 @@ Example:
     );
   }
 
-  @Roles('org_admin')
+  @RequirePermission('admin.manage')
   @Post('database/migrate')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -93,7 +94,7 @@ Only org_admin role can access this endpoint.`
     return this.adminService.runMigrations();
   }
 
-  @Roles('org_admin')
+  @RequirePermission('admin.manage')
   @Post('database/update-and-migrate')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -157,7 +158,7 @@ Example:
     );
   }
 
-  @Roles('org_admin')
+  @RequirePermission('admin.read')
   @Get('database/current-config')
   @ApiOperation({
     summary: 'Get current database configuration',
@@ -184,7 +185,7 @@ Only org_admin role can access this endpoint.`
     return this.adminService.getCurrentDatabaseConfig();
   }
 
-  @Roles('org_admin')
+  @RequirePermission('admin.read')
   @Get('users/all-with-courses')
   @ApiOperation({
     summary: 'Get all users across all tenants with course assignments',
@@ -244,7 +245,7 @@ Only org_admin role can access this endpoint.`
     return this.adminService.getAllUsersWithCourseAssignments();
   }
 
-  @Roles('org_admin')
+  @RequirePermission('admin.read')
   @Get('users/tenant/:tenantId/with-courses')
   @ApiOperation({
     summary: 'Get users for a specific tenant with course assignments',
@@ -298,7 +299,7 @@ Only org_admin role can access this endpoint.`
     return this.adminService.getTenantUsersWithCourseAssignments(tenantId);
   }
 
-  @Roles('org_admin')
+  @RequirePermission('admin.create')
   @Post('tenants/:tenantId/create-admin')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
@@ -337,12 +338,12 @@ This endpoint allows organization admins to create administrative users for each
   @ApiResponse({ status: 403, description: 'Insufficient permissions' })
   async createTenantAdmin(
     @Param('tenantId') tenantId: string,
-    @Body() body: {
-      email: string;
-      displayName: string;
-      password: string;
-    }
+    @Body() body: CreateTenantAdminDto
   ) {
+    if (!body || !body.email || !body.displayName || !body.password) {
+      throw new BadRequestException('Email, displayName, and password are required');
+    }
+    
     return this.adminService.createTenantAdmin({
       tenantId,
       email: body.email,
@@ -351,7 +352,7 @@ This endpoint allows organization admins to create administrative users for each
     });
   }
 
-  @Roles('platform_admin')
+  @RequirePermission('admin.read')
   @Get('users/all-organized')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -424,5 +425,108 @@ Only platform_admin role can access this endpoint.`
   async getAllUsersOrganized() {
     return this.adminService.getAllUsersOrganized();
   }
+
+  @RequirePermission('admin.read')
+  @Get('permissions/predefined')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get all predefined permissions',
+    description: `Retrieves the complete list of predefined system permissions.
+    
+These are immutable permissions that define all possible actions in the system.
+Permissions are organized by category and are used to control access to endpoints.
+
+Only platform_admin role can access this endpoint.`
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of all predefined permissions',
+    schema: {
+      example: {
+        success: true,
+        totalPermissions: 71,
+        categories: {
+          auth: 4,
+          users: 6,
+          tenants: 5,
+          roles: 7,
+          courses: 8,
+          modules: 4,
+          lessons: 6,
+          quizzes: 8,
+          'live-classes': 8,
+          licenses: 9,
+          admin: 4
+        },
+        permissions: [
+          {
+            id: 'perm-123',
+            code: 'courses.create',
+            name: 'Create new course',
+            category: 'courses'
+          },
+          {
+            id: 'perm-124',
+            code: 'courses.list',
+            name: 'List all courses',
+            category: 'courses'
+          }
+        ]
+      }
+    }
+  })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  async getPredefinedPermissions() {
+    return this.adminService.getPredefinedPermissions();
+  }
+
+  @RequirePermission('admin.manage')
+  @Post('permissions/seed-world-class')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Seed world-class permission system',
+    description: `Creates 115 predefined permissions across 11 categories and 5 system roles with intelligent permission scoping.
+    
+This endpoint initializes:
+- 115 granular permissions (resource.action format)
+- 5 predefined system roles (platform_admin, tenant_admin, trainer, instructor, learner)
+- Role-permission mappings for each role
+
+Only platform_admin can execute this endpoint.`
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Permissions and roles seeded successfully',
+    schema: {
+      example: {
+        success: true,
+        message: 'World-class permission system seeded successfully',
+        summary: {
+          permissionsCreated: 115,
+          rolesCreated: 5,
+          rolePermissionAssignments: 215,
+          categories: 11,
+          permissionsByCategory: {
+            'User Management': 8,
+            'Course Management': 12,
+            'Module Management': 6,
+            'Lesson Management': 8,
+            'Quiz Management': 12,
+            'Live Class Management': 8,
+            'Content Management': 10,
+            'Role Management': 6,
+            'Permission Management': 8,
+            'Reporting & Analytics': 12,
+            'System Administration': 5
+          }
+        }
+      }
+    }
+  })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  async seedWorldClassPermissions() {
+    return this.adminService.seedWorldClassPermissions();
+  }
 }
+
 

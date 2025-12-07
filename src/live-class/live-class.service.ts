@@ -93,7 +93,7 @@ export class LiveClassService {
         participants: {
           select: {
             id: true,
-            userId: true,
+            tenantUserId: true,
             role: true,
             joinedAt: true,
             leftAt: true
@@ -288,12 +288,12 @@ export class LiveClassService {
     }
 
     // Check if already joined
-    const existingParticipant = liveClass.participants.find(p => p.userId === userId && !p.leftAt);
+    const existingParticipant = liveClass.participants.find(p => p.tenantUserId === userId && !p.leftAt);
     if (existingParticipant) {
       return {
         id: existingParticipant.id,
         liveClassId,
-        userId,
+        tenantUserId: userId,
         roomId: liveClass.roomId,
         message: 'Already joined this live class'
       };
@@ -303,7 +303,7 @@ export class LiveClassService {
     const participant = await this.prisma.liveClassParticipant.create({
       data: {
         liveClassId,
-        userId,
+        tenantUserId: userId,
         role: liveClass.createdBy === userId ? 'teacher' : 'participant'
       }
     });
@@ -311,7 +311,7 @@ export class LiveClassService {
     return {
       id: participant.id,
       liveClassId,
-      userId,
+      tenantUserId: userId,
       roomId: liveClass.roomId,
       joinedAt: participant.joinedAt,
       message: 'Joined live class successfully'
@@ -337,7 +337,7 @@ export class LiveClassService {
     const participant = await this.prisma.liveClassParticipant.findFirst({
       where: {
         liveClassId,
-        userId,
+        tenantUserId: userId,
         leftAt: null
       }
     });
@@ -354,7 +354,7 @@ export class LiveClassService {
     return {
       id: updated.id,
       liveClassId,
-      userId,
+      tenantUserId: userId,
       leftAt: updated.leftAt,
       message: 'Left live class successfully'
     };
@@ -382,7 +382,7 @@ export class LiveClassService {
         leftAt: null
       },
       select: {
-        userId: true,
+        tenantUserId: true,
         role: true,
         joinedAt: true
       }

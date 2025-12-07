@@ -1,21 +1,25 @@
 # RBAC Quick Reference Guide
 
 ## Overview
+
 All endpoints now use **RolesGuard** with **@Roles()** decorator for consistent role-based access control.
 
 ## Key Commands
 
 ### Reset RBAC Tables & Seed Fresh Data
+
 ```bash
 npm run rbac:reset
 ```
 
 ### Just Clean RBAC Tables
+
 ```bash
 npm run rbac:clean
 ```
 
 ### Just Seed RBAC Data
+
 ```bash
 npm run rbac:seed
 ```
@@ -25,7 +29,7 @@ npm run rbac:seed
 ```
 Organization Level:
   └─ org_admin (Can manage all tenants, users, database, roles)
-     
+
 Tenant Level:
   ├─ tenant_admin (Can manage users and courses in tenant)
   ├─ training_manager (Can create/manage courses and live classes)
@@ -36,19 +40,20 @@ Tenant Level:
 
 ## Admin Endpoints (All Require org_admin Role)
 
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/api/admin/database/update-config` | POST | Update PostgreSQL config |
-| `/api/admin/database/migrate` | POST | Run Prisma migrations |
-| `/api/admin/database/update-and-migrate` | POST | Config + migrations |
-| `/api/admin/database/current-config` | GET | View current DB config |
-| `/api/admin/users/all-with-courses` | GET | View all users + courses |
-| `/api/admin/users/tenant/:tenantId/with-courses` | GET | View tenant users + courses |
-| `/api/admin/tenants/:tenantId/create-admin` | POST | Create tenant admin user |
+| Endpoint                                         | Method | Purpose                     |
+| ------------------------------------------------ | ------ | --------------------------- |
+| `/api/admin/database/update-config`              | POST   | Update PostgreSQL config    |
+| `/api/admin/database/migrate`                    | POST   | Run Prisma migrations       |
+| `/api/admin/database/update-and-migrate`         | POST   | Config + migrations         |
+| `/api/admin/database/current-config`             | GET    | View current DB config      |
+| `/api/admin/users/all-with-courses`              | GET    | View all users + courses    |
+| `/api/admin/users/tenant/:tenantId/with-courses` | GET    | View tenant users + courses |
+| `/api/admin/tenants/:tenantId/create-admin`      | POST   | Create tenant admin user    |
 
 ## How to Add New Permissions
 
 1. **Edit `prisma/seed-rbac.ts`**:
+
    ```typescript
    const permissionsToCreate = [
      // ... existing permissions
@@ -57,6 +62,7 @@ Tenant Level:
    ```
 
 2. **Assign to Role**:
+
    ```typescript
    {
      code: 'some_role',
@@ -76,19 +82,17 @@ Tenant Level:
 ## How to Add New Role
 
 1. **Edit `prisma/seed-rbac.ts`**:
+
    ```typescript
    rolesToCreate.push({
      code: 'new_role',
      name: 'New Role Name',
-     permissions: [
-       'permission1',
-       'permission2',
-       'permission3'
-     ],
+     permissions: ['permission1', 'permission2', 'permission3'],
    });
    ```
 
 2. **Run Seed**:
+
    ```bash
    npm run rbac:reset
    ```
@@ -106,6 +110,7 @@ Tenant Level:
 ## How to Protect New Endpoints
 
 ### Option 1: Single Role
+
 ```typescript
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('training_manager')
@@ -114,6 +119,7 @@ createCourse() { ... }
 ```
 
 ### Option 2: Multiple Roles
+
 ```typescript
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('training_manager', 'org_admin')
@@ -122,6 +128,7 @@ listCourses() { ... }
 ```
 
 ### Option 3: No Role Restriction (Auth Only)
+
 ```typescript
 @UseGuards(JwtAuthGuard)
 @Get('my-profile')
@@ -131,6 +138,7 @@ getProfile() { ... }
 ## API Testing
 
 ### 1. Register User
+
 ```bash
 POST /api/auth/register
 {
@@ -141,6 +149,7 @@ POST /api/auth/register
 ```
 
 ### 2. Create Tenant
+
 ```bash
 POST /api/tenants
 {
@@ -149,6 +158,7 @@ POST /api/tenants
 ```
 
 ### 3. Assign org_admin Role
+
 ```bash
 POST /api/roles/assign-role
 {
@@ -159,6 +169,7 @@ POST /api/roles/assign-role
 ```
 
 ### 4. Login
+
 ```bash
 POST /api/auth/login
 {
@@ -166,9 +177,11 @@ POST /api/auth/login
   "password": "SecurePass123!"
 }
 ```
+
 Response includes: `access_token`
 
 ### 5. Access Admin Endpoint
+
 ```bash
 GET /api/admin/users/all-with-courses
 Headers: Authorization: Bearer {access_token}
@@ -177,14 +190,17 @@ Headers: Authorization: Bearer {access_token}
 ## Troubleshooting
 
 ### Error: "Access denied. Required roles: org_admin"
+
 - **Cause**: User doesn't have org_admin role
 - **Fix**: Assign role via `/api/roles/assign-role`
 
 ### Error: "User not found in request"
+
 - **Cause**: JWT token is missing or invalid
 - **Fix**: Include `Authorization: Bearer {token}` header
 
 ### Error: "RolePermission not found" when seeding
+
 - **Cause**: Permission hasn't been created yet
 - **Fix**: Make sure permission is in `permissionsToCreate` array before role definition
 

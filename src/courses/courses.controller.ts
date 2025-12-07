@@ -1,23 +1,28 @@
-import { Controller, Post, Body, UseGuards, Get, Query, Param, Patch, UseInterceptors, UploadedFile, Delete, Request, BadRequestException, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Get, Query, Param, Patch, UseInterceptors, UploadedFile, Delete, Request, BadRequestException, HttpCode, HttpStatus, NotFoundException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiBearerAuth, ApiConsumes, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CoursesService } from './courses.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import { RolesGuard } from '../common/guards/roles.guard';
-import { Roles } from '../common/decorators/roles.decorator';
+import { PermissionGuard } from '../common/guards/permission.guard';
+import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { CreateCourseDto } from './dto/create-course.dto';
 import { CreateModuleDto } from './dto/create-module.dto';
 import { CreateLessonDto } from './dto/create-lesson.dto';
 import { UploadVideoDto } from './dto/upload-video.dto';
 import { AssignCourseDto, AssignBulkCourseDto } from './dto/assign-course.dto';
 import { GenerateQuizFromVideoDto } from './dto/generate-quiz.dto';
+import { ProcessVideoUrlDto, GenerateVideoSummaryDto, GenerateQuizFromVideoDto as GenerateQuizFromVideoDto2 } from './dto/process-video.dto';
+import { VideoProcessingService } from './services/video-processing.service';
 
 
 @ApiTags('courses')
 @ApiBearerAuth('access-token')
 @Controller('courses')
 export class CoursesController {
-  constructor(private svc: CoursesService) {}
+  constructor(
+    private svc: CoursesService,
+    private videoProcessing: VideoProcessingService
+  ) {}
 
   private validateTenantAccess(userTenantId: string, requestedTenantId: string) {
     if (userTenantId !== requestedTenantId) {
@@ -25,8 +30,8 @@ export class CoursesController {
     }
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('training_manager', 'org_admin')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('courses.create')
   @Post()
   @ApiOperation({ 
     summary: 'Create a new course',
@@ -54,8 +59,8 @@ export class CoursesController {
     return this.svc.create(dto.tenantId, dto.title, dto.summary, dto.level, dto.ownerUserId);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('training_manager','org_admin','learner')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('courses.read')
   @Get()
   @ApiOperation({ 
     summary: 'List all courses for a tenant',
@@ -84,8 +89,8 @@ export class CoursesController {
     return this.svc.list(tenantId);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('training_manager','org_admin','learner')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('courses.read')
   @Get(':id')
   @ApiOperation({ 
     summary: 'Get course details with modules and lessons',
@@ -127,8 +132,8 @@ export class CoursesController {
     return course;
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('training_manager', 'org_admin')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('courses.update')
   @Patch(':id')
   @ApiOperation({ 
     summary: 'Update course details',
@@ -154,8 +159,8 @@ export class CoursesController {
   }
 
   // Module endpoints
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('training_manager', 'org_admin')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('courses.update')
   @Post('modules/create')
   @ApiOperation({ 
     summary: 'Create a new module in a course',
@@ -180,8 +185,8 @@ export class CoursesController {
     return this.svc.createModule(dto.courseId, dto.title, dto.description, dto.displayOrder, req.user.tenantId);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('training_manager','org_admin','learner')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('courses.read')
   @Get('course/:courseId/modules')
   @ApiOperation({ 
     summary: 'List all modules in a course',
@@ -213,8 +218,8 @@ export class CoursesController {
     return this.svc.getModulesByCourse(courseId);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('training_manager','org_admin','learner')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('courses.read')
   @Get('modules/:moduleId')
   @ApiOperation({ 
     summary: 'Get module details with lessons',
@@ -229,8 +234,8 @@ export class CoursesController {
     return this.svc.getModule(moduleId, req.user.tenantId);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('training_manager', 'org_admin')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('courses.update')
   @Patch('modules/:moduleId')
   @ApiOperation({ 
     summary: 'Update module details',
@@ -243,8 +248,8 @@ export class CoursesController {
   }
 
   // Lesson endpoints
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('training_manager', 'org_admin')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('courses.update')
   @Post('lessons/create')
   @ApiOperation({ 
     summary: 'Create a new lesson in a module',
@@ -272,8 +277,8 @@ export class CoursesController {
     return this.svc.createLesson(dto.moduleId, dto.title, dto.description, dto.displayOrder, req.user.tenantId);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('training_manager','org_admin','learner')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('courses.read')
   @Get('lessons/:lessonId')
   @ApiOperation({ 
     summary: 'Get lesson details',
@@ -288,8 +293,8 @@ export class CoursesController {
     return this.svc.getLesson(lessonId, req.user.tenantId);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('training_manager', 'org_admin')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('courses.update')
   @Patch('lessons/:lessonId')
   @ApiOperation({ 
     summary: 'Update lesson details',
@@ -302,8 +307,8 @@ export class CoursesController {
   }
 
   // Video upload endpoints
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('training_manager', 'org_admin')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('courses.update')
   @Post('lessons/:lessonId/upload-video')
   @UseInterceptors(FileInterceptor('video', {
     limits: { fileSize: 500 * 1024 * 1024 }, // 500MB limit
@@ -354,8 +359,8 @@ export class CoursesController {
     return this.svc.uploadVideo(lessonId, file, dto.videoDuration, req.user.tenantId);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('training_manager', 'org_admin')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('courses.delete')
   @Delete('lessons/:lessonId/video')
   @ApiOperation({ 
     summary: 'Delete video from a lesson',
@@ -379,8 +384,8 @@ export class CoursesController {
   // Course Assignment & Progress Endpoints
   // ============================================================================
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('training_manager', 'org_admin')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('courses.assign')
   @Post('assign')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ 
@@ -435,8 +440,8 @@ Only training_manager and org_admin roles can assign courses.`
     return this.svc.assignCourseToUsers(dto.tenantId, dto.courseId, dto.assignToUserIds, req.user.id, dueDate, courseLink);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('training_manager', 'org_admin')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('courses.assign')
   @Post('assign-bulk')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ 
@@ -625,8 +630,8 @@ Tracks:
     return this.svc.updateLessonProgress(req.user.id, lessonId, req.user.tenantId, body.watchedDuration, body.isCompleted);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('training_manager', 'org_admin')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('courses.read')
   @Get('tenant-stats')
   @ApiOperation({ 
     summary: 'Get course statistics for tenant',
@@ -664,8 +669,8 @@ Statistics include:
   // Quiz Generation Endpoints (AI-Powered)
   // ============================================================================
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('training_manager', 'org_admin')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('courses.publish')
   @Post('lessons/:lessonId/generate-quizzes-from-summary')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ 
@@ -723,8 +728,8 @@ Note: Summary must be added first using the /add-summary endpoint before generat
     return this.svc.generateQuizzesFromStoredSummary(lessonId, courseId, req.user.tenantId);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('training_manager', 'instructor', 'org_admin', 'learner', 'viewer')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('courses.read')
   @Get('lessons/:lessonId/quizzes')
   @ApiOperation({ 
     summary: 'List all quizzes for a lesson',
@@ -752,8 +757,8 @@ Note: Summary must be added first using the /add-summary endpoint before generat
     return this.svc.getQuizzesForLesson(lessonId, req.user.tenantId);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('training_manager', 'instructor', 'org_admin', 'learner', 'viewer')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('courses.read')
   @Get('quizzes/:quizId')
   @ApiOperation({ 
     summary: 'Get quiz details with questions and options',
@@ -793,8 +798,8 @@ Note: Summary must be added first using the /add-summary endpoint before generat
     return this.svc.getQuizDetails(quizId, req.user.tenantId);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('training_manager', 'instructor', 'org_admin')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('courses.update')
   @Post('lessons/:lessonId/add-summary')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ 
@@ -867,5 +872,221 @@ Process:
     }
 
     return this.svc.saveLessonSummary(lessonId, courseId, summary, req.user.tenantId);
+  }
+
+  // ============================================================================
+  // AI-Powered Video Processing Endpoints (S3 Video URL)
+  // ============================================================================
+
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('courses.update')
+  @Post('ai/video-summary')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ 
+    summary: 'Generate video summary from S3 URL using OpenAI',
+    description: `Analyzes a video from S3 URL and generates:
+    - Comprehensive summary (300-500 words)
+    - Estimated video duration
+    - Key learning points
+    
+Uses OpenAI GPT-4 Vision API for analysis.`
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['videoUrl', 'videoTitle'],
+      properties: {
+        videoUrl: {
+          type: 'string',
+          format: 'url',
+          example: 'https://s3.amazonaws.com/bucket/video.mp4',
+          description: 'S3 HTTP/HTTPS URL of the video'
+        },
+        videoTitle: {
+          type: 'string',
+          example: 'Advanced JavaScript Concepts',
+          description: 'Title of the video for context'
+        }
+      }
+    }
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Video summary generated successfully',
+    schema: {
+      example: {
+        summary: 'This video covers advanced JavaScript concepts including async/await, promises, and closure patterns...',
+        duration: 3600,
+        keyPoints: [
+          'Understanding async/await syntax and benefits',
+          'Promise chaining vs async/await',
+          'Error handling with try-catch in async functions',
+          'Closure and scope in JavaScript',
+          'Performance considerations'
+        ]
+      }
+    }
+  })
+  async generateVideoSummary(@Body() dto: GenerateVideoSummaryDto) {
+    return this.videoProcessing.generateVideoSummary(dto.videoUrl);
+  }
+
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('courses.publish')
+  @Post('ai/video-quiz')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ 
+    summary: 'Generate quiz questions from lesson summary stored in database',
+    description: `Generates multiple-choice quiz questions from a video summary that was previously stored in the database.
+    
+This endpoint uses the lesson's existing video summary (videoSummary field) to generate quizzes.
+Make sure to have added a summary to the lesson first using the /add-summary endpoint.
+
+Each question has 4 options with explanations.`
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['lessonId', 'courseId'],
+      properties: {
+        lessonId: {
+          type: 'string',
+          example: 'lesson-123',
+          description: 'ID of the lesson with stored summary'
+        },
+        courseId: {
+          type: 'string',
+          example: 'course-123',
+          description: 'ID of the course for access validation'
+        }
+      }
+    }
+  })
+  @ApiResponse({ 
+    status: 201, 
+    description: 'Quiz generated from database summary and saved successfully',
+    schema: {
+      example: {
+        quizzes: [
+          {
+            question: 'What is the primary advantage of async/await over promises?',
+            options: [
+              'Better performance',
+              'Cleaner, more readable syntax',
+              'Supports more browsers',
+              'Allows parallel execution'
+            ],
+            correctAnswer: 1,
+            explanation: 'Async/await provides cleaner and more readable syntax for handling asynchronous operations'
+          }
+        ]
+      }
+    }
+  })
+  @ApiResponse({ status: 400, description: 'Lesson has no stored summary' })
+  @ApiResponse({ status: 404, description: 'Lesson or course not found' })
+  async generateQuizFromVideoUrl(@Request() req, @Body() dto: any) {
+    const { lessonId, courseId } = dto;
+
+    if (!courseId) {
+      throw new BadRequestException('courseId is required');
+    }
+
+    // Verify course access
+    const course = await this.svc.get(courseId);
+    if (!course || req.user.tenantId !== course.tenantId) {
+      throw new BadRequestException('You do not have access to this course');
+    }
+
+    // Use the service method which handles lesson validation and summary check
+    return this.svc.generateQuizzesFromStoredSummary(lessonId, courseId, req.user.tenantId);
+  }
+
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('courses.update')
+  @Post('ai/video-summary-to-lesson')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ 
+    summary: 'Generate video summary from S3 URL and save to lesson',
+    description: `Analyzes a video from S3 URL, generates a summary, and automatically saves it to the lesson.
+    
+Perfect workflow: Upload → Generate Summary → Save to Lesson`
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['videoUrl', 'videoTitle', 'lessonId', 'courseId', 'tenantId'],
+      properties: {
+        videoUrl: {
+          type: 'string',
+          format: 'url',
+          example: 'https://s3.amazonaws.com/bucket/video.mp4',
+          description: 'S3 HTTP/HTTPS URL of the video'
+        },
+        videoTitle: {
+          type: 'string',
+          example: 'Advanced JavaScript Concepts',
+          description: 'Title of the video'
+        },
+        lessonId: {
+          type: 'string',
+          example: 'lesson-123',
+          description: 'ID of the lesson'
+        },
+        courseId: {
+          type: 'string',
+          example: 'course-123',
+          description: 'ID of the course'
+        },
+        tenantId: {
+          type: 'string',
+          example: 'tenant-123',
+          description: 'ID of the tenant'
+        }
+      }
+    }
+  })
+  @ApiResponse({ 
+    status: 201, 
+    description: 'Summary generated and saved to lesson',
+    schema: {
+      example: {
+        lessonId: 'lesson-123',
+        summary: 'Comprehensive video summary...',
+        keyPoints: ['Point 1', 'Point 2', 'Point 3'],
+        duration: 3600,
+        saved: true,
+        message: 'Video summary generated and saved to lesson'
+      }
+    }
+  })
+  async generateAndSaveVideoSummary(@Request() req, @Body() dto: ProcessVideoUrlDto) {
+    this.validateTenantAccess(req.user.tenantId, dto.tenantId);
+
+    // Verify course access
+    const course = await this.svc.get(dto.courseId);
+    if (!course || req.user.tenantId !== course.tenantId) {
+      throw new BadRequestException('You do not have access to this course');
+    }
+
+    // Step 1: Generate summary
+    const summaryResult = await this.videoProcessing.generateVideoSummary(dto.videoUrl);
+
+    // Step 2: Save to lesson
+    const saved = await this.svc.saveLessonSummary(
+      dto.lessonId,
+      dto.courseId,
+      summaryResult.summary,
+      req.user.tenantId
+    );
+
+    return {
+      lessonId: dto.lessonId,
+      summary: summaryResult.summary,
+      keyPoints: summaryResult.keyPoints,
+      duration: summaryResult.duration,
+      saved: true,
+      message: 'Video summary generated and saved to lesson'
+    };
   }
 }

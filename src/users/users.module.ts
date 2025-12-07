@@ -4,6 +4,7 @@ import { UsersService } from './users.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersController } from './users.controller';
 import { EmailService } from '../common/services/email.service';
+import { CommonModule } from '../common/common.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { EmailService } from '../common/services/email.service';
         fileSize: 5 * 1024 * 1024, // 5MB
       },
     }),
+    CommonModule,
   ],
   providers: [UsersService, PrismaService, EmailService],
   controllers: [UsersController],
