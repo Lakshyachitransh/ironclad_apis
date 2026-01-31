@@ -39,6 +39,24 @@ export class LiveClassController {
     private readonly attendanceService: AttendanceService,
   ) {}
 
+  /**
+   * Get tenant ID for user - handles both platform_admin (null) and regular users
+   * Platform admins can have null tenantId and access all tenants
+   */
+  private getTenantId(actor: JwtUser): string {
+    if (!actor?.tenantId && !actor?.roles?.includes('platform_admin')) {
+      throw new BadRequestException('No tenant information in token');
+    }
+    return actor.tenantId || 'all'; // 'all' for platform_admin
+  }
+
+  /**
+   * Check if actor is platform_admin (bypass tenant restrictions)
+   */
+  private isPlatformAdmin(actor: JwtUser): boolean {
+    return actor?.roles?.includes('platform_admin') ?? false;
+  }
+
   @UseGuards(JwtAuthGuard, PermissionGuard)
   @RequirePermission('admin.manage')
   @Post()
@@ -82,11 +100,9 @@ Only training_manager and org_admin roles can create live classes.`
   async create(@Body() dto: CreateLiveClassDto, @Request() req: ExpressRequest) {
     // @ts-ignore
     const actor = req.user as JwtUser;
-    if (!actor?.tenantId) {
-      throw new BadRequestException('No tenant information in token');
-    }
+    const tenantId = this.getTenantId(actor);
 
-    return this.liveClassService.createLiveClass(dto, actor.id, actor.tenantId, actor.roles);
+    return this.liveClassService.createLiveClass(dto, actor.id, tenantId, actor.roles);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -132,7 +148,8 @@ Only training_manager and org_admin roles can create live classes.`
   ) {
     // @ts-ignore
     const actor = req.user as JwtUser;
-    if (!actor?.tenantId) {
+    // Platform admin bypass - don't enforce tenantId check
+    if (!this.isPlatformAdmin(actor) && !actor?.tenantId) {
       throw new BadRequestException('No tenant information in token');
     }
 
@@ -182,7 +199,7 @@ Only training_manager and org_admin roles can create live classes.`
   ) {
     // @ts-ignore
     const actor = req.user as JwtUser;
-    if (!actor?.tenantId) {
+    if (!this.isPlatformAdmin(actor) && !actor?.tenantId) {
       throw new BadRequestException('No tenant information in token');
     }
 
@@ -216,9 +233,7 @@ Only training_manager and org_admin roles can create live classes.`
   ) {
     // @ts-ignore
     const actor = req.user as JwtUser;
-    if (!actor?.tenantId) {
-      throw new BadRequestException('No tenant information in token');
-    }
+    if (!this.isPlatformAdmin(actor) && !actor?.tenantId) { throw new BadRequestException("No tenant information in token"); }
 
     return this.liveClassService.startLiveClass(liveClassId, actor.id, actor.tenantId);
   }
@@ -250,9 +265,7 @@ Only training_manager and org_admin roles can create live classes.`
   ) {
     // @ts-ignore
     const actor = req.user as JwtUser;
-    if (!actor?.tenantId) {
-      throw new BadRequestException('No tenant information in token');
-    }
+    if (!this.isPlatformAdmin(actor) && !actor?.tenantId) { throw new BadRequestException("No tenant information in token"); }
 
     return this.liveClassService.endLiveClass(liveClassId, actor.id, actor.tenantId);
   }
@@ -297,9 +310,7 @@ Constraints:
   ) {
     // @ts-ignore
     const actor = req.user as JwtUser;
-    if (!actor?.tenantId) {
-      throw new BadRequestException('No tenant information in token');
-    }
+    if (!this.isPlatformAdmin(actor) && !actor?.tenantId) { throw new BadRequestException("No tenant information in token"); }
 
     return this.liveClassService.joinLiveClass(liveClassId, actor.id, actor.tenantId);
   }
@@ -331,9 +342,7 @@ Constraints:
   ) {
     // @ts-ignore
     const actor = req.user as JwtUser;
-    if (!actor?.tenantId) {
-      throw new BadRequestException('No tenant information in token');
-    }
+    if (!this.isPlatformAdmin(actor) && !actor?.tenantId) { throw new BadRequestException("No tenant information in token"); }
 
     return this.liveClassService.leaveLiveClass(liveClassId, actor.id, actor.tenantId);
   }
@@ -375,9 +384,7 @@ Constraints:
   ) {
     // @ts-ignore
     const actor = req.user as JwtUser;
-    if (!actor?.tenantId) {
-      throw new BadRequestException('No tenant information in token');
-    }
+    if (!this.isPlatformAdmin(actor) && !actor?.tenantId) { throw new BadRequestException("No tenant information in token"); }
 
     return this.liveClassService.getActiveParticipants(liveClassId, actor.tenantId);
   }
@@ -420,9 +427,7 @@ Constraints:
 
     // @ts-ignore
     const actor = req.user as JwtUser;
-    if (!actor?.tenantId) {
-      throw new BadRequestException('No tenant information in token');
-    }
+    if (!this.isPlatformAdmin(actor) && !actor?.tenantId) { throw new BadRequestException("No tenant information in token"); }
 
     return this.liveClassService.setRecordingUrl(liveClassId, body.recordingUrl, actor.tenantId);
   }
@@ -468,9 +473,7 @@ Used for:
   ) {
     // @ts-ignore
     const actor = req.user as JwtUser;
-    if (!actor?.tenantId) {
-      throw new BadRequestException('No tenant information in token');
-    }
+    if (!this.isPlatformAdmin(actor) && !actor?.tenantId) { throw new BadRequestException("No tenant information in token"); }
 
     await this.attendanceService.trackActivity(liveClassId, userId, actor.tenantId);
     return { message: 'Activity tracked' };
@@ -518,9 +521,7 @@ Calculates:
   ) {
     // @ts-ignore
     const actor = req.user as JwtUser;
-    if (!actor?.tenantId) {
-      throw new BadRequestException('No tenant information in token');
-    }
+    if (!this.isPlatformAdmin(actor) && !actor?.tenantId) { throw new BadRequestException("No tenant information in token"); }
 
     const result = await this.attendanceService.recordParticipantLeave(
       liveClassId,
@@ -570,9 +571,7 @@ Typically called when:
   ) {
     // @ts-ignore
     const actor = req.user as JwtUser;
-    if (!actor?.tenantId) {
-      throw new BadRequestException('No tenant information in token');
-    }
+    if (!this.isPlatformAdmin(actor) && !actor?.tenantId) { throw new BadRequestException("No tenant information in token"); }
 
     await this.attendanceService.calculateClassAttendance(liveClassId, actor.tenantId);
     return {
@@ -627,9 +626,7 @@ Typically called when:
   ) {
     // @ts-ignore
     const actor = req.user as JwtUser;
-    if (!actor?.tenantId) {
-      throw new BadRequestException('No tenant information in token');
-    }
+    if (!this.isPlatformAdmin(actor) && !actor?.tenantId) { throw new BadRequestException("No tenant information in token"); }
 
     return this.attendanceService.getAttendanceReport(liveClassId, actor.tenantId);
   }
@@ -675,9 +672,7 @@ Typically called when:
   ) {
     // @ts-ignore
     const actor = req.user as JwtUser;
-    if (!actor?.tenantId) {
-      throw new BadRequestException('No tenant information in token');
-    }
+    if (!this.isPlatformAdmin(actor) && !actor?.tenantId) { throw new BadRequestException("No tenant information in token"); }
 
     return this.attendanceService.getParticipantAttendance(
       liveClassId,
@@ -733,9 +728,7 @@ Typically called when:
   ) {
     // @ts-ignore
     const actor = req.user as JwtUser;
-    if (!actor?.tenantId) {
-      throw new BadRequestException('No tenant information in token');
-    }
+    if (!this.isPlatformAdmin(actor) && !actor?.tenantId) { throw new BadRequestException("No tenant information in token"); }
 
     return this.attendanceService.getTrainingProgress(
       userId,

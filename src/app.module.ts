@@ -12,6 +12,7 @@ import { LiveClassModule } from './live-class/live-class.module';
 import { AdminModule } from './admin/admin.module';
 import { LicensesModule } from './licenses/licenses.module';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ExercisesModule } from './exercises/exercises.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     LiveClassModule,
     AdminModule,
     LicensesModule,
+    ExercisesModule,
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',

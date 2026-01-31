@@ -48,6 +48,7 @@ export class PermissionGuard implements CanActivate {
       return true;
     }
 
+    // Non-platform admins must belong to a tenant
     if (!user.tenantId) {
       throw new ForbiddenException('User does not belong to any tenant');
     }

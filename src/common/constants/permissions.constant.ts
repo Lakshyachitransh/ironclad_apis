@@ -414,14 +414,6 @@ export const PERMISSIONS: PermissionDefinition[] = [
     category: 'Tenant Management'
   },
   {
-    code: 'tenants.create-admin',
-    name: 'Create Tenant Admin',
-    description: 'Appoint tenant administrators',
-    resource: 'tenants',
-    action: 'create-admin',
-    category: 'Tenant Management'
-  },
-  {
     code: 'tenants.manage-settings',
     name: 'Manage Tenant Settings',
     description: 'Configure tenant settings',

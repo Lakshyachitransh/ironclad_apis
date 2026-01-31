@@ -35,6 +35,20 @@ export class UsersController {
   ) {}
 
   /**
+   * Get tenant ID for user - handles both platform_admin (null) and regular users
+   * Platform admins can have null tenantId and access all tenants
+   */
+  private getTenantId(actor: any): string | null {
+    if (actor?.roles?.includes('platform_admin')) {
+      return null; // Platform admin can work across all tenants
+    }
+    if (!actor?.tenantId) {
+      throw new BadRequestException('No tenant information in token');
+    }
+    return actor.tenantId;
+  }
+
+  /**
    * Create a user and attach to a tenant by name.
    * - Accepts tenantName in the DTO
    * - Looks up tenant by name
@@ -117,7 +131,9 @@ export class UsersController {
     // req.user should be set by JwtAuthGuard and validated by TenantAdminGuard
     // @ts-ignore
     const actor = req.user as JwtUser | undefined;
-    if (!actor?.tenantId) {
+    
+    // Platform admin can create users without tenantId check
+    if (!actor?.roles?.includes('platform_admin') && !actor?.tenantId) {
       throw new BadRequestException('No tenant information in token');
     }
 
@@ -178,6 +194,13 @@ export class UsersController {
   async list(@Req() req: Request) {
     // @ts-ignore
     const actor = req.user as JwtUser | undefined;
+    
+    // For platform_admin without tenant, return empty or fetch specific tenant users
+    // For now, return empty list for cross-tenant access to avoid loading all users at once
+    if (actor?.roles?.includes('platform_admin')) {
+      return { users: [] };
+    }
+    
     if (!actor?.tenantId) return { users: [] };
 
     const rows = await this.users.listUsers(actor.tenantId);
@@ -391,7 +414,7 @@ user3@example.com,Bob Johnson,SecurePass123,training_manager`
   @ApiResponse({ status: 413, description: 'File size exceeds 5MB limit' })
   async bulkUploadCsv(
     @UploadedFile() file: Express.Multer.File,
-    @Body() body: { defaultRoles?: string },
+    @Body() body: { defaultRoles?: string; tenantId?: string },
     @Req() req: Request
   ) {
     if (!file) {
@@ -404,8 +427,17 @@ user3@example.com,Bob Johnson,SecurePass123,training_manager`
 
     // @ts-ignore
     const actor = req.user as JwtUser | undefined;
-    if (!actor?.tenantId) {
+    
+    // Platform admin can bulk create without tenantId check
+    if (!actor?.roles?.includes('platform_admin') && !actor?.tenantId) {
       throw new BadRequestException('No tenant information in token');
+    }
+
+    // For regular users, use their tenantId; for platform_admin, require tenantId in body
+    const tenantId = actor?.tenantId || (actor?.roles?.includes('platform_admin') ? body.tenantId : null);
+    
+    if (!tenantId) {
+      throw new BadRequestException('Tenant ID is required for bulk user creation');
     }
 
     // Parse default roles if provided
@@ -419,7 +451,7 @@ user3@example.com,Bob Johnson,SecurePass123,training_manager`
     // Call bulk create service
     const result = await this.users.bulkCreateUsersFromCsv(
       csvContent,
-      actor.tenantId,
+      tenantId,
       defaultRoles
     );
 

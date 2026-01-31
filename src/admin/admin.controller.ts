@@ -4,7 +4,6 @@ import { AdminService } from './admin.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { PermissionGuard } from '../common/guards/permission.guard';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
-import { CreateTenantAdminDto } from './dto/create-tenant-admin.dto';
 
 @ApiTags('admin')
 @ApiBearerAuth('access-token')
@@ -297,59 +296,6 @@ Only org_admin role can access this endpoint.`
   @ApiResponse({ status: 400, description: 'Tenant not found' })
   async getTenantUsersWithCourses(@Param('tenantId') tenantId: string) {
     return this.adminService.getTenantUsersWithCourseAssignments(tenantId);
-  }
-
-  @RequirePermission('admin.create')
-  @Post('tenants/:tenantId/create-admin')
-  @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({
-    summary: 'Create a tenant admin user',
-    description: `Creates a new user with tenant_admin role for a specific tenant.
-    
-Only org_admin role can access this endpoint.
-
-This endpoint allows organization admins to create administrative users for each tenant. The created user will automatically have the tenant_admin role and can manage users, courses, and content within that tenant.`
-  })
-  @ApiResponse({
-    status: 201,
-    description: 'Tenant admin created successfully',
-    schema: {
-      example: {
-        success: true,
-        message: 'Tenant admin created successfully',
-        user: {
-          id: 'user-789',
-          email: 'admin@acmecorp.com',
-          displayName: 'Acme Corp Admin',
-          status: 'active',
-          createdAt: '2025-11-25T10:00:00Z'
-        },
-        tenant: {
-          id: 'tenant-456',
-          name: 'Acme Corporation'
-        },
-        roles: ['tenant_admin'],
-        userTenantId: 'ut-789'
-      }
-    }
-  })
-  @ApiResponse({ status: 400, description: 'Invalid input or tenant not found' })
-  @ApiResponse({ status: 409, description: 'User with this email already exists' })
-  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
-  async createTenantAdmin(
-    @Param('tenantId') tenantId: string,
-    @Body() body: CreateTenantAdminDto
-  ) {
-    if (!body || !body.email || !body.displayName || !body.password) {
-      throw new BadRequestException('Email, displayName, and password are required');
-    }
-    
-    return this.adminService.createTenantAdmin({
-      tenantId,
-      email: body.email,
-      displayName: body.displayName,
-      password: body.password
-    });
   }
 
   @RequirePermission('admin.read')

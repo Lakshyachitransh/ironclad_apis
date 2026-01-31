@@ -44,20 +44,24 @@ const ALL_PERMISSIONS = [
 
   // Courses endpoints
   { code: 'courses.create', name: 'Create course' },
+  { code: 'courses.read', name: 'Read courses' },
   { code: 'courses.list', name: 'List courses' },
   { code: 'courses.view', name: 'View course' },
   { code: 'courses.update', name: 'Update course' },
   { code: 'courses.delete', name: 'Delete course' },
   { code: 'courses.assign', name: 'Assign course' },
+  { code: 'courses.publish', name: 'Publish course' },
   { code: 'courses.progress', name: 'View course progress' },
 
   // Modules endpoints
   { code: 'modules.create', name: 'Create module' },
+  { code: 'modules.read', name: 'Read modules' },
   { code: 'modules.update', name: 'Update module' },
   { code: 'modules.delete', name: 'Delete module' },
 
   // Lessons endpoints
   { code: 'lessons.create', name: 'Create lesson' },
+  { code: 'lessons.read', name: 'Read lessons' },
   { code: 'lessons.update', name: 'Update lesson' },
   { code: 'lessons.delete', name: 'Delete lesson' },
   { code: 'lessons.upload-video', name: 'Upload lesson video' },
@@ -65,6 +69,7 @@ const ALL_PERMISSIONS = [
 
   // Quizzes endpoints
   { code: 'quizzes.create', name: 'Create quiz' },
+  { code: 'quizzes.read', name: 'Read quizzes' },
   { code: 'quizzes.update', name: 'Update quiz' },
   { code: 'quizzes.delete', name: 'Delete quiz' },
   { code: 'quizzes.publish', name: 'Publish quiz' },
@@ -101,7 +106,8 @@ const ALL_PERMISSIONS = [
   { code: 'admin.database.update', name: 'Update database config' },
   { code: 'admin.database.migrate', name: 'Run migrations' },
   { code: 'admin.users.view', name: 'View all users' },
-  { code: 'admin.users.create', name: 'Create admin user' },
+  { code: 'admin.manage', name: 'Manage admin operations' },
+  { code: 'admin.read', name: 'Read admin data' },
   { code: 'admin.tenants.manage', name: 'Manage tenants' }
 ];
 

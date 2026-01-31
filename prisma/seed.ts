@@ -10,7 +10,7 @@ async function main() {
   const app = await prisma.application.upsert({
     where: { code: 'LMS' },
     update: {},
-    create: { code: 'LMS', name: 'Learning Management System' }
+    create: { code: 'LMS', name: 'Learning Management System', status: 'active' }
   });
 
   const platform = await prisma.tenant.upsert({

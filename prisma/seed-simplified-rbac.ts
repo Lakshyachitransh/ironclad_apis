@@ -38,7 +38,6 @@ const CORE_PERMISSIONS = [
 
   // Admin Operations
   { code: 'admin.read', name: 'Read admin data', resource: 'admin', action: 'read', category: 'admin' },
-  { code: 'admin.create', name: 'Create admin data', resource: 'admin', action: 'create', category: 'admin' },
   { code: 'admin.manage', name: 'Manage system', resource: 'admin', action: 'manage', category: 'admin' },
 ];
 

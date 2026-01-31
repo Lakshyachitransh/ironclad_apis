@@ -24,8 +24,14 @@ export class CoursesController {
     private videoProcessing: VideoProcessingService
   ) {}
 
-  private validateTenantAccess(userTenantId: string, requestedTenantId: string) {
-    if (userTenantId !== requestedTenantId) {
+  private validateTenantAccess(user: any, requestedTenantId: string) {
+    // Platform admins have access to all tenants
+    if (user.roles?.includes('platform_admin')) {
+      return;
+    }
+    
+    // Regular users must match their tenant
+    if (!user.tenantId || user.tenantId !== requestedTenantId) {
       throw new BadRequestException('You do not have access to this tenant');
     }
   }
@@ -55,7 +61,7 @@ export class CoursesController {
   })
   @ApiResponse({ status: 403, description: 'Insufficient permissions or tenant mismatch' })
   async create(@Request() req, @Body() dto: CreateCourseDto) {
-    this.validateTenantAccess(req.user.tenantId, dto.tenantId);
+    this.validateTenantAccess(req.user, dto.tenantId);
     return this.svc.create(dto.tenantId, dto.title, dto.summary, dto.level, dto.ownerUserId);
   }
 
@@ -85,7 +91,7 @@ export class CoursesController {
     }
   })
   async list(@Request() req, @Query('tenantId') tenantId: string) {
-    this.validateTenantAccess(req.user.tenantId, tenantId);
+    this.validateTenantAccess(req.user, tenantId);
     return this.svc.list(tenantId);
   }
 
@@ -126,7 +132,8 @@ export class CoursesController {
   })
   async get(@Request() req, @Param('id') id: string) {
     const course = await this.svc.get(id);
-    if (course && req.user.tenantId !== course.tenantId) {
+    // Platform admin can access all courses
+    if (course && !req.user.roles?.includes('platform_admin') && req.user.tenantId !== course.tenantId) {
       throw new BadRequestException('You do not have access to this course');
     }
     return course;
@@ -152,7 +159,8 @@ export class CoursesController {
   @ApiResponse({ status: 200, description: 'Course updated successfully' })
   async update(@Request() req, @Param('id') id: string, @Body() body: any) {
     const course = await this.svc.get(id);
-    if (course && req.user.tenantId !== course.tenantId) {
+    // Platform admin can access all courses
+    if (course && !req.user.roles?.includes('platform_admin') && req.user.tenantId !== course.tenantId) {
       throw new BadRequestException('You do not have access to this course');
     }
     return this.svc.update(id, body);
@@ -212,7 +220,8 @@ export class CoursesController {
   })
   async getModulesByCourse(@Request() req, @Param('courseId') courseId: string) {
     const course = await this.svc.get(courseId);
-    if (course && req.user.tenantId !== course.tenantId) {
+    // Platform admin can access all courses
+    if (course && !req.user.roles?.includes('platform_admin') && req.user.tenantId !== course.tenantId) {
       throw new BadRequestException('You do not have access to this course');
     }
     return this.svc.getModulesByCourse(courseId);
@@ -434,7 +443,7 @@ Only training_manager and org_admin roles can assign courses.`
   @ApiResponse({ status: 400, description: 'Invalid input' })
   @ApiResponse({ status: 404, description: 'Course not found' })
   async assignCourse(@Request() req, @Body() dto: AssignCourseDto) {
-    this.validateTenantAccess(req.user.tenantId, dto.tenantId);
+    this.validateTenantAccess(req.user, dto.tenantId);
     const dueDate = dto.dueDate ? new Date(dto.dueDate) : undefined;
     const courseLink = dto.courseLink;
     return this.svc.assignCourseToUsers(dto.tenantId, dto.courseId, dto.assignToUserIds, req.user.id, dueDate, courseLink);
@@ -454,7 +463,7 @@ Only training_manager and org_admin roles can assign courses.`
     description: 'Courses assigned successfully'
   })
   async assignBulkCourses(@Request() req, @Body() dto: AssignBulkCourseDto) {
-    this.validateTenantAccess(req.user.tenantId, dto.tenantId);
+    this.validateTenantAccess(req.user, dto.tenantId);
     const dueDate = dto.dueDate ? new Date(dto.dueDate) : undefined;
     
     const results = await Promise.all(
@@ -721,7 +730,7 @@ Note: Summary must be added first using the /add-summary endpoint before generat
     }
 
     const course = await this.svc.get(courseId);
-    if (!course || req.user.tenantId !== course.tenantId) {
+    if (!course || (!req.user.roles?.includes('platform_admin') && req.user.tenantId !== course.tenantId)) {
       throw new BadRequestException('You do not have access to this course');
     }
 
@@ -867,7 +876,7 @@ Process:
     }
 
     const course = await this.svc.get(courseId);
-    if (!course || req.user.tenantId !== course.tenantId) {
+    if (!course || (!req.user.roles?.includes('platform_admin') && req.user.tenantId !== course.tenantId)) {
       throw new BadRequestException('You do not have access to this course');
     }
 
@@ -994,7 +1003,7 @@ Each question has 4 options with explanations.`
 
     // Verify course access
     const course = await this.svc.get(courseId);
-    if (!course || req.user.tenantId !== course.tenantId) {
+    if (!course || (!req.user.roles?.includes('platform_admin') && req.user.tenantId !== course.tenantId)) {
       throw new BadRequestException('You do not have access to this course');
     }
 
@@ -1061,11 +1070,11 @@ Perfect workflow: Upload → Generate Summary → Save to Lesson`
     }
   })
   async generateAndSaveVideoSummary(@Request() req, @Body() dto: ProcessVideoUrlDto) {
-    this.validateTenantAccess(req.user.tenantId, dto.tenantId);
+    this.validateTenantAccess(req.user, dto.tenantId);
 
     // Verify course access
     const course = await this.svc.get(dto.courseId);
-    if (!course || req.user.tenantId !== course.tenantId) {
+    if (!course || (req.user.tenantId && req.user.tenantId !== course.tenantId && !req.user.roles?.includes('platform_admin'))) {
       throw new BadRequestException('You do not have access to this course');
     }
 

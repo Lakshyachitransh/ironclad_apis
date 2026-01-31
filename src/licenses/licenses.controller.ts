@@ -12,6 +12,20 @@ import { CreateLicenseDto, UpdateLicenseDto, AssignLicenseUserDto, RevokeLicense
 export class LicensesController {
   constructor(private licensesService: LicensesService) {}
 
+  /**
+   * Check if user has access to a tenant
+   * Platform admins and org_admins have access to all tenants
+   */
+  private validateTenantAccess(user: any, tenantId: string) {
+    const isPlatformAdmin = user?.roles?.includes('platform_admin');
+    const isOrgAdmin = user?.roles?.[0] === 'org_admin';
+    const isSameTenant = user?.tenantId === tenantId;
+
+    if (!isPlatformAdmin && !isOrgAdmin && !isSameTenant) {
+      throw new BadRequestException('You do not have access to this tenant');
+    }
+  }
+
   // ============================================================================
   // Application Management Endpoints (Org Admin Only)
   // ============================================================================
@@ -151,10 +165,7 @@ Only org admins and training managers can create licenses for their tenant.`
     @Param('tenantId') tenantId: string,
     @Body() dto: CreateLicenseDto
   ): Promise<any> {
-    if (req.user.tenantId !== tenantId && req.user.roles[0] !== 'org_admin') {
-      throw new BadRequestException('You do not have access to this tenant');
-    }
-
+    this.validateTenantAccess(req.user, tenantId);
     return this.licensesService.createLicense(tenantId, dto, req.user.id);
   }
 
@@ -173,10 +184,7 @@ Only org admins and training managers can create licenses for their tenant.`
     @Request() req,
     @Param('tenantId') tenantId: string
   ): Promise<any[]> {
-    if (req.user.tenantId !== tenantId && req.user.roles[0] !== 'org_admin') {
-      throw new BadRequestException('You do not have access to this tenant');
-    }
-
+    this.validateTenantAccess(req.user, tenantId);
     return this.licensesService.getTenantLicenses(tenantId);
   }
 
@@ -197,10 +205,7 @@ Only org admins and training managers can create licenses for their tenant.`
     @Param('tenantId') tenantId: string,
     @Param('licenseId') licenseId: string
   ): Promise<any> {
-    if (req.user.tenantId !== tenantId && req.user.roles[0] !== 'org_admin') {
-      throw new BadRequestException('You do not have access to this tenant');
-    }
-
+    this.validateTenantAccess(req.user, tenantId);
     return this.licensesService.getLicense(tenantId, licenseId);
   }
 
@@ -223,10 +228,7 @@ Only org admins and training managers can create licenses for their tenant.`
     @Param('licenseId') licenseId: string,
     @Body() dto: UpdateLicenseDto
   ): Promise<any> {
-    if (req.user.tenantId !== tenantId && req.user.roles[0] !== 'org_admin') {
-      throw new BadRequestException('You do not have access to this tenant');
-    }
-
+    this.validateTenantAccess(req.user, tenantId);
     return this.licensesService.updateLicense(tenantId, licenseId, dto, req.user.id);
   }
 
@@ -262,10 +264,7 @@ Only org admins and training managers can create licenses for their tenant.`
     @Param('licenseId') licenseId: string,
     @Body('newEndDate') newEndDate: string
   ): Promise<any> {
-    if (req.user.tenantId !== tenantId && req.user.roles[0] !== 'org_admin') {
-      throw new BadRequestException('You do not have access to this tenant');
-    }
-
+    this.validateTenantAccess(req.user, tenantId);
     return this.licensesService.renewLicense(tenantId, licenseId, newEndDate, req.user.id);
   }
 
@@ -299,10 +298,7 @@ Only org admins and training managers can create licenses for their tenant.`
     @Param('licenseId') licenseId: string,
     @Body('reason') reason: string
   ): Promise<any> {
-    if (req.user.tenantId !== tenantId && req.user.roles[0] !== 'org_admin') {
-      throw new BadRequestException('You do not have access to this tenant');
-    }
-
+    this.validateTenantAccess(req.user, tenantId);
     return this.licensesService.suspendLicense(tenantId, licenseId, reason, req.user.id);
   }
 
@@ -333,10 +329,7 @@ This increases the current seat count and grants the user access to the applicat
     @Param('licenseId') licenseId: string,
     @Body() dto: AssignLicenseUserDto
   ): Promise<any> {
-    if (req.user.tenantId !== tenantId && req.user.roles[0] !== 'org_admin') {
-      throw new BadRequestException('You do not have access to this tenant');
-    }
-
+    this.validateTenantAccess(req.user, tenantId);
     return this.licensesService.assignLicenseToUser(tenantId, licenseId, dto, req.user.id);
   }
 
@@ -362,10 +355,7 @@ This frees up a seat and revokes the user's access to the application.`
     @Param('licenseId') licenseId: string,
     @Body() dto: RevokeLicenseUserDto
   ): Promise<any> {
-    if (req.user.tenantId !== tenantId && req.user.roles[0] !== 'org_admin') {
-      throw new BadRequestException('You do not have access to this tenant');
-    }
-
+    this.validateTenantAccess(req.user, tenantId);
     return this.licensesService.revokeLicenseFromUser(tenantId, licenseId, dto, req.user.id);
   }
 
@@ -386,10 +376,7 @@ This frees up a seat and revokes the user's access to the application.`
     @Param('tenantId') tenantId: string,
     @Param('licenseId') licenseId: string
   ): Promise<any[]> {
-    if (req.user.tenantId !== tenantId && req.user.roles[0] !== 'org_admin') {
-      throw new BadRequestException('You do not have access to this tenant');
-    }
-
+    this.validateTenantAccess(req.user, tenantId);
     return this.licensesService.getLicenseUsers(tenantId, licenseId);
   }
 
@@ -427,10 +414,7 @@ This frees up a seat and revokes the user's access to the application.`
     @Request() req,
     @Param('tenantId') tenantId: string
   ): Promise<any> {
-    if (req.user.tenantId !== tenantId && req.user.roles[0] !== 'org_admin') {
-      throw new BadRequestException('You do not have access to this tenant');
-    }
-
+    this.validateTenantAccess(req.user, tenantId);
     return this.licensesService.getLicenseUsageStats(tenantId);
   }
 
@@ -448,7 +432,7 @@ This frees up a seat and revokes the user's access to the application.`
     @Request() req,
     @Param('tenantId') tenantId: string
   ): Promise<any[]> {
-    if (req.user.tenantId !== tenantId && req.user.roles[0] !== 'org_admin') {
+    if (req.user.tenantId !== tenantId && req.user.roles[0] !== 'org_admin' && !req.user.roles?.includes('platform_admin')) {
       throw new BadRequestException('You do not have access to this tenant');
     }
 
