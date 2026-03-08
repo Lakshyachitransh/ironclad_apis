@@ -2,7 +2,8 @@ import { Injectable, BadRequestException, InternalServerErrorException } from '@
 import { PrismaService } from '../../prisma/prisma.service';
 import { S3Service } from '../../common/services/s3.service';
 import { OpenAI } from 'openai';
-import * as AWS from 'aws-sdk';
+import { TranscribeClient, StartTranscriptionJobCommand, GetTranscriptionJobCommand, LanguageCode, MediaFormat } from '@aws-sdk/client-transcribe';
+import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -15,15 +16,23 @@ interface TranscriptionJob {
 
 @Injectable()
 export class VideoTranscriptionService {
-  private transcribeClient: AWS.TranscribeService;
+  private transcribeClient: TranscribeClient;
+  private s3Client: S3Client;
   private openai: OpenAI;
 
   constructor(
     private prisma: PrismaService,
     private s3Service: S3Service,
   ) {
-    this.transcribeClient = new AWS.TranscribeService({
+    this.transcribeClient = new TranscribeClient({
       region: process.env.AWS_REGION || 'eu-north-1',
+    });
+    this.s3Client = new S3Client({
+      region: process.env.AWS_REGION || 'eu-north-1',
+      credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+      },
     });
     this.openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
@@ -166,19 +175,16 @@ Return ONLY the summary text, no additional formatting or explanations.`,
   ): Promise<string> {
     try {
       const fileContent = fs.readFileSync(videoFilePath);
-      const s3 = new AWS.S3({
-        region: process.env.AWS_REGION || 'eu-north-1',
-      });
 
-      const params = {
+      const command = new PutObjectCommand({
         Bucket: process.env.AWS_S3_BUCKET || 'ironclad-bucket',
         Key: s3Key,
         Body: fileContent,
         ContentType: 'video/mp4',
         ServerSideEncryption: 'AES256',
-      };
+      });
 
-      await s3.upload(params).promise();
+      await this.s3Client.send(command);
 
       // Return S3 URI for Transcribe
       const bucketName = process.env.AWS_S3_BUCKET || 'ironclad-bucket';
@@ -200,8 +206,8 @@ Return ONLY the summary text, no additional formatting or explanations.`,
   ): Promise<TranscriptionJob> {
     const params = {
       TranscriptionJobName: jobName,
-      LanguageCode: 'en-US',
-      MediaFormat: 'mp4',
+      LanguageCode: LanguageCode.EN_US,
+      MediaFormat: MediaFormat.MP4,
       Media: {
         MediaFileUri: mediaFileUri,
       },
@@ -216,7 +222,8 @@ Return ONLY the summary text, no additional formatting or explanations.`,
     };
 
     try {
-      const result = await this.transcribeClient.startTranscriptionJob(params).promise();
+      const command = new StartTranscriptionJobCommand(params);
+      const result = await this.transcribeClient.send(command);
       return {
         jobName: result.TranscriptionJob.TranscriptionJobName,
         jobStatus: result.TranscriptionJob.TranscriptionJobStatus,
@@ -243,9 +250,8 @@ Return ONLY the summary text, no additional formatting or explanations.`,
       const params = { TranscriptionJobName: jobName };
 
       try {
-        const result = await this.transcribeClient
-          .getTranscriptionJob(params)
-          .promise();
+        const command = new GetTranscriptionJobCommand(params);
+        const result = await this.transcribeClient.send(command);
 
         const job = result.TranscriptionJob;
 
@@ -282,22 +288,19 @@ Return ONLY the summary text, no additional formatting or explanations.`,
     confidence: number;
   }> {
     try {
-      const s3 = new AWS.S3({
-        region: process.env.AWS_REGION || 'eu-north-1',
-      });
-
       // Get transcript file from S3
       const transcriptUri = job.Transcript.TranscriptFileUri;
       const bucketName = process.env.AWS_S3_BUCKET || 'ironclad-bucket';
       const key = transcriptUri.replace(`s3://${bucketName}/`, '');
 
-      const params = {
+      const command = new GetObjectCommand({
         Bucket: bucketName,
         Key: key,
-      };
+      });
 
-      const data = await s3.getObject(params).promise();
-      const transcriptJson = JSON.parse(data.Body.toString('utf-8'));
+      const response = await this.s3Client.send(command);
+      const bodyString = await response.Body.transformToString('utf-8');
+      const transcriptJson = JSON.parse(bodyString);
 
       // Extract transcript text
       const transcriptItems = transcriptJson.results.transcripts;
@@ -493,7 +496,8 @@ Return ONLY the summary text, no additional formatting or explanations.`,
   }> {
     try {
       const params = { TranscriptionJobName: jobName };
-      const result = await this.transcribeClient.getTranscriptionJob(params).promise();
+      const command = new GetTranscriptionJobCommand(params);
+      const result = await this.transcribeClient.send(command);
       const job = result.TranscriptionJob;
 
       if (job.TranscriptionJobStatus === 'COMPLETED') {

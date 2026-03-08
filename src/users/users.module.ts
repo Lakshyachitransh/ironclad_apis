@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { UsersController } from './users.controller';
 import { EmailService } from '../common/services/email.service';
 import { CommonModule } from '../common/common.module';
+import { RolesModule } from '../roles/roles.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { CommonModule } from '../common/common.module';
       },
     }),
     CommonModule,
+    RolesModule,
   ],
   providers: [UsersService, PrismaService, EmailService],
   controllers: [UsersController],

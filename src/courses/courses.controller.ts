@@ -2,6 +2,7 @@ import { Controller, Post, Body, UseGuards, Get, Query, Param, Patch, UseInterce
 import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiBearerAuth, ApiConsumes, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CoursesService } from './courses.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { PermissionGuard } from '../common/guards/permission.guard';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
@@ -21,7 +22,8 @@ import { VideoProcessingService } from './services/video-processing.service';
 export class CoursesController {
   constructor(
     private svc: CoursesService,
-    private videoProcessing: VideoProcessingService
+    private videoProcessing: VideoProcessingService,
+    private prisma: PrismaService
   ) {}
 
   private validateTenantAccess(user: any, requestedTenantId: string) {
@@ -93,6 +95,146 @@ export class CoursesController {
   async list(@Request() req, @Query('tenantId') tenantId: string) {
     this.validateTenantAccess(req.user, tenantId);
     return this.svc.list(tenantId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('debug-assignments')
+  async debugAssignments(@Request() req) {
+    try {
+      return {
+        status: 'success',
+        message: 'Debug endpoint working',
+        userId: req.user?.id || 'no-id',
+        tenantId: req.user?.tenantId || 'no-tenant'
+      };
+    } catch (error) {
+      return {
+        status: 'error',
+        error: String(error)
+      };
+    }
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('my-courses')
+  @ApiOperation({ 
+    summary: 'Get all courses assigned to authenticated user',
+    description: 'Lists all courses assigned to the current user with progress information.'
+  })
+  @ApiQuery({ name: 'status', type: String, required: false, description: 'Filter by assignment status (assigned, started, completed, expired)' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'List of assigned courses with progress',
+    schema: {
+      example: [
+        {
+          assignmentId: 'assignment-id-1',
+          course: {
+            id: '123e4567-e89b-12d3-a456-426614174000',
+            title: 'Advanced JavaScript',
+            summary: 'Master advanced JS concepts',
+            level: 'Advanced'
+          },
+          assignmentStatus: 'started',
+          dueDate: '2025-12-31T23:59:59Z',
+          assignedAt: '2025-11-15T09:00:00Z',
+          completedAt: null,
+          progress: {
+            progressPercentage: 45,
+            lessonsCompleted: 11,
+            lessonsTotal: 24,
+            status: 'in_progress'
+          }
+        }
+      ]
+    }
+  })
+  async getMyAssignedCourses(@Request() req, @Query('status') status?: string) {
+    return this.svc.getUserAssignedCourses(req.user.id, req.user.tenantId, status);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('assigned-to-me')
+  @ApiOperation({ 
+    summary: 'Get all courses assigned to logged-in user',
+    description: `Retrieves all courses that are assigned to the currently authenticated user.
+    
+Returns a simple list with:
+- Course details (title, description, level)
+- Assignment status (assigned, started, completed)
+- Assignment dates
+- User progress information
+
+Supports filtering by status (assigned, started, completed, expired).`
+  })
+  @ApiQuery({ name: 'status', type: String, required: false, description: 'Filter by assignment status (assigned, started, completed, expired)' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'List of assigned courses',
+    schema: {
+      example: [
+        {
+          assignmentId: 'assignment-id-1',
+          courseId: 'course-id-1',
+          courseTitle: 'Cyber Security',
+          courseLevel: 'Intermediate',
+          courseSummary: 'Learn cybersecurity basics',
+          assignmentStatus: 'assigned',
+          dueDate: '2026-03-26T00:00:00.000Z',
+          assignedAt: '2026-03-08T12:38:08.149Z',
+          completedAt: null,
+          progress: {
+            progressPercentage: 0,
+            lessonsCompleted: 0,
+            lessonsTotal: 1,
+            status: 'not_started'
+          }
+        }
+      ]
+    }
+  })
+  async getAssignedCoursesToMe(@Request() req, @Query('status') status?: string) {
+    // @ts-ignore
+    const userId = req.user.id;
+    // @ts-ignore
+    const tenantId = req.user.tenantId;
+    
+    return this.svc.getUserAssignedCourses(userId, tenantId, status);
+  }
+
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('courses.read')
+  @Get('tenant-stats')
+  @ApiOperation({ 
+    summary: 'Get course statistics for tenant',
+    description: `Returns aggregate statistics about course assignments and completion.
+    
+Statistics include:
+- Total courses and assignments
+- User progress distribution
+- Average completion percentage
+- Overdue assignments`
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Tenant course statistics',
+    schema: {
+      example: {
+        totalCourses: 15,
+        totalAssignments: 150,
+        totalUsers: 50,
+        averageProgress: 62,
+        userProgressByStatus: {
+          'not_started': 25,
+          'in_progress': 20,
+          'completed': 5
+        },
+        overdueAssignments: 8
+      }
+    }
+  })
+  async getTenantStats(@Request() req) {
+    return this.svc.getCourseTenantStats(req.user.tenantId);
   }
 
   @UseGuards(JwtAuthGuard, PermissionGuard)
@@ -286,6 +428,21 @@ export class CoursesController {
     return this.svc.createLesson(dto.moduleId, dto.title, dto.description, dto.displayOrder, req.user.tenantId);
   }
 
+  // Test endpoint - no auth required (for debugging presigned URL)
+  @Get('lessons/:lessonId/debug')
+  @ApiOperation({ 
+    summary: 'DEBUG: Get lesson details (no auth)',
+    description: 'Test endpoint for debugging - does not require authentication'
+  })
+  @ApiParam({ name: 'lessonId', type: String, description: 'Lesson ID' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Lesson details'
+  })
+  async getLessonDebug(@Param('lessonId') lessonId: string) {
+    return this.svc.getLesson(lessonId, null);
+  }
+
   @UseGuards(JwtAuthGuard, PermissionGuard)
   @RequirePermission('courses.read')
   @Get('lessons/:lessonId')
@@ -445,8 +602,14 @@ Only training_manager and org_admin roles can assign courses.`
   async assignCourse(@Request() req, @Body() dto: AssignCourseDto) {
     this.validateTenantAccess(req.user, dto.tenantId);
     const dueDate = dto.dueDate ? new Date(dto.dueDate) : undefined;
-    const courseLink = dto.courseLink;
-    return this.svc.assignCourseToUsers(dto.tenantId, dto.courseId, dto.assignToUserIds, req.user.id, dueDate, courseLink);
+    return this.svc.assignCourseToUsers(
+      dto.tenantId, 
+      dto.courseId, 
+      dto.assignToUserIds, 
+      req.user.id, 
+      dueDate,
+      req.user // Pass user info for authorization checks
+    );
   }
 
   @UseGuards(JwtAuthGuard, PermissionGuard)
@@ -468,7 +631,7 @@ Only training_manager and org_admin roles can assign courses.`
     
     const results = await Promise.all(
       dto.courseIds.map(courseId => 
-        this.svc.assignCourseToUsers(dto.tenantId, courseId, dto.assignToUserIds, req.user.id, dueDate)
+        this.svc.assignCourseToUsers(dto.tenantId, courseId, dto.assignToUserIds, req.user.id, dueDate, req.user)
       )
     );
 
@@ -547,42 +710,7 @@ Returns:
   }
 
   @UseGuards(JwtAuthGuard)
-  @Get('my-courses')
-  @ApiOperation({ 
-    summary: 'Get all courses assigned to authenticated user',
-    description: 'Lists all courses assigned to the current user with progress information.'
-  })
-  @ApiQuery({ name: 'status', type: String, required: false, description: 'Filter by assignment status (assigned, started, completed, expired)' })
-  @ApiResponse({ 
-    status: 200, 
-    description: 'List of assigned courses with progress',
-    schema: {
-      example: [
-        {
-          assignmentId: 'assignment-id-1',
-          course: {
-            id: '123e4567-e89b-12d3-a456-426614174000',
-            title: 'Advanced JavaScript',
-            summary: 'Master advanced JS concepts',
-            level: 'Advanced'
-          },
-          assignmentStatus: 'started',
-          dueDate: '2025-12-31T23:59:59Z',
-          assignedAt: '2025-11-15T09:00:00Z',
-          completedAt: null,
-          progress: {
-            progressPercentage: 45,
-            lessonsCompleted: 11,
-            lessonsTotal: 24,
-            status: 'in_progress'
-          }
-        }
-      ]
-    }
-  })
-  async getMyAssignedCourses(@Request() req, @Query('status') status?: string) {
-    return this.svc.getUserAssignedCourses(req.user.id, req.user.tenantId, status);
-  }
+
 
   @UseGuards(JwtAuthGuard)
   @Post('lessons/:lessonId/progress')
@@ -639,40 +767,7 @@ Tracks:
     return this.svc.updateLessonProgress(req.user.id, lessonId, req.user.tenantId, body.watchedDuration, body.isCompleted);
   }
 
-  @UseGuards(JwtAuthGuard, PermissionGuard)
-  @RequirePermission('courses.read')
-  @Get('tenant-stats')
-  @ApiOperation({ 
-    summary: 'Get course statistics for tenant',
-    description: `Returns aggregate statistics about course assignments and completion.
-    
-Statistics include:
-- Total courses and assignments
-- User progress distribution
-- Average completion percentage
-- Overdue assignments`
-  })
-  @ApiResponse({ 
-    status: 200, 
-    description: 'Tenant course statistics',
-    schema: {
-      example: {
-        totalCourses: 15,
-        totalAssignments: 150,
-        totalUsers: 50,
-        averageProgress: 62,
-        userProgressByStatus: {
-          'not_started': 25,
-          'in_progress': 20,
-          'completed': 5
-        },
-        overdueAssignments: 8
-      }
-    }
-  })
-  async getTenantStats(@Request() req) {
-    return this.svc.getCourseTenantStats(req.user.tenantId);
-  }
+
 
   // ============================================================================
   // Quiz Generation Endpoints (AI-Powered)
@@ -876,6 +971,7 @@ Process:
     }
 
     const course = await this.svc.get(courseId);
+    // Allow platform_admin even if tenantId is null
     if (!course || (!req.user.roles?.includes('platform_admin') && req.user.tenantId !== course.tenantId)) {
       throw new BadRequestException('You do not have access to this course');
     }
@@ -889,6 +985,47 @@ Process:
 
   @UseGuards(JwtAuthGuard, PermissionGuard)
   @RequirePermission('courses.update')
+  @Post('ai/video-transcript')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ 
+    summary: 'Extract transcript from video using Whisper',
+    description: `Extracts the audio from a video and transcribes it using OpenAI Whisper.
+    Returns only the transcript text, allowing users to manually create a summary.
+    
+Process:
+1. Downloads video from S3 URL
+2. Extracts audio from video
+3. Downsamples audio to optimize for Whisper (16kHz, mono)
+4. Transcribes using Whisper API
+5. Returns the transcript text`
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['videoUrl'],
+      properties: {
+        videoUrl: {
+          type: 'string',
+          format: 'url',
+          example: 'https://s3.amazonaws.com/bucket/video.mp4',
+          description: 'S3 HTTP/HTTPS URL of the video'
+        }
+      }
+    }
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Transcript extracted successfully',
+    schema: {
+      example: {
+        transcript: 'Hello, team, welcome to my session on Coffee with Prabh. And today we are going to discuss about some advanced TypeScript concepts...'
+      }
+    }
+  })
+  async getVideoTranscript(@Body() dto: GenerateVideoSummaryDto) {
+    return this.videoProcessing.getVideoTranscript(dto.videoUrl);
+  }
+
   @Post('ai/video-summary')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ 
@@ -1003,6 +1140,7 @@ Each question has 4 options with explanations.`
 
     // Verify course access
     const course = await this.svc.get(courseId);
+    // Allow platform_admin even if tenantId is null
     if (!course || (!req.user.roles?.includes('platform_admin') && req.user.tenantId !== course.tenantId)) {
       throw new BadRequestException('You do not have access to this course');
     }
@@ -1070,12 +1208,14 @@ Perfect workflow: Upload → Generate Summary → Save to Lesson`
     }
   })
   async generateAndSaveVideoSummary(@Request() req, @Body() dto: ProcessVideoUrlDto) {
-    this.validateTenantAccess(req.user, dto.tenantId);
-
-    // Verify course access
-    const course = await this.svc.get(dto.courseId);
-    if (!course || (req.user.tenantId && req.user.tenantId !== course.tenantId && !req.user.roles?.includes('platform_admin'))) {
-      throw new BadRequestException('You do not have access to this course');
+    // Allow platform_admin even if tenantId is null
+    if (!req.user.roles?.includes('platform_admin')) {
+      this.validateTenantAccess(req.user, dto.tenantId);
+      // Verify course access for non-platform_admin
+      const course = await this.svc.get(dto.courseId);
+      if (!course || req.user.tenantId !== course.tenantId) {
+        throw new BadRequestException('You do not have access to this course');
+      }
     }
 
     // Step 1: Generate summary

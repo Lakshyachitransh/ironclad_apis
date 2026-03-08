@@ -1,4 +1,4 @@
-import { IsEmail, IsString, IsOptional, MinLength, IsArray } from 'class-validator';
+import { IsEmail, IsString, IsOptional, MinLength } from 'class-validator';
 
 export class CreatePlatformUserDto {
   @IsEmail()
@@ -12,7 +12,6 @@ export class CreatePlatformUserDto {
   @IsString()
   displayName?: string;
 
-  @IsOptional()
-  @IsArray()
-  platformRoles?: string[];
+  @IsString()
+  platformRole: string; // Single platform role code (e.g., 'platform_admin', 'platform_moderator', 'viewer')
 }

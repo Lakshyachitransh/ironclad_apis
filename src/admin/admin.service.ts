@@ -183,17 +183,13 @@ export class AdminService {
    */
   async getAllUsersWithCourseAssignments(tenantId?: string) {
     try {
-      // Get all users first
+      // Get TenantUsers for the specified tenant (or all if no tenantId)
       let allUsers;
       if (tenantId) {
-        // Get users for specific tenant
-        allUsers = await this.prisma.user.findMany({
+        // Get users for specific tenant from TenantUser table
+        allUsers = await this.prisma.tenantUser.findMany({
           where: {
-            tenants: {
-              some: {
-                tenantId: tenantId
-              }
-            }
+            tenantId: tenantId
           },
           select: {
             id: true,
@@ -203,13 +199,14 @@ export class AdminService {
           }
         });
       } else {
-        // Get all users
-        allUsers = await this.prisma.user.findMany({
+        // Get all tenant users from all tenants
+        allUsers = await this.prisma.tenantUser.findMany({
           select: {
             id: true,
             email: true,
             displayName: true,
-            status: true
+            status: true,
+            tenantId: true
           }
         });
       }

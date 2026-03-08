@@ -15,25 +15,26 @@ datasource db {
 }
 
 model Tenant {
-  id                    String                     @id @default(uuid())
-  name                  String                     @unique
-  status                String                     @default("active")
-  createdAt             DateTime                   @default(now())
-  users                 UserTenant[]
-  tenantUsers           TenantUser[]
-  courses               Course[]
-  licenses              TenantApplicationLicense[]
-  liveClasses           LiveClass[]
-  courseAssignments     CourseAssignment[]
-  userProgress          UserProgress[]
-  lessonProgress        LessonProgress[]
-  licenseAudits         LicenseAudit[]
-  exerciseTemplates     ExerciseTemplate[]
-  exercises             Exercise[]
-  exerciseSubmissions   ExerciseSubmission[]
-  exerciseAttempts      ExerciseAttempt[]
-  conversations         Conversation[]
-  highlights            Highlight[]
+  id                  String                     @id @default(uuid())
+  name                String                     @unique
+  status              String                     @default("active")
+  createdAt           DateTime                   @default(now())
+  users               UserTenant[]
+  tenantUsers         TenantUser[]
+  courses             Course[]
+  licenses            TenantApplicationLicense[]
+  liveClasses         LiveClass[]
+  courseAssignments   CourseAssignment[]
+  userProgress        UserProgress[]
+  lessonProgress      LessonProgress[]
+  licenseAudits       LicenseAudit[]
+  exerciseTemplates   ExerciseTemplate[]
+  exercises           Exercise[]
+  exerciseSubmissions ExerciseSubmission[]
+  exerciseAttempts    ExerciseAttempt[]
+  conversations       Conversation[]
+  highlights          Highlight[]
+  tenantRoles         TenantRole[]
 }
 
 model Application {
@@ -228,6 +229,24 @@ model RolePermission {
   permissionId String
 }
 
+model TenantRole {
+  id          String   @id @default(uuid())
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId    String
+  roleCode    String   // The code of the role (e.g., 'learner', 'trainer', 'tenant_admin')
+  roleName    String   
+  description String?
+  category    String   @default("custom") // custom or system
+  isSystem    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Unique: only one role with same code per tenant
+  @@unique([tenantId, roleCode], name: "tenant_role_code_unique")
+  @@index([tenantId])
+  @@index([roleCode])
+}
+
 model Course {
   id                String             @id @default(uuid())
   tenant            Tenant             @relation(fields: [tenantId], references: [id])
@@ -261,8 +280,8 @@ model Module {
 }
 
 model Lesson {
-  id               String                 @id @default(uuid())
-  module           Module                 @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  id               String               @id @default(uuid())
+  module           Module               @relation(fields: [moduleId], references: [id], onDelete: Cascade)
   moduleId         String
   title            String
   description      String?
@@ -270,10 +289,10 @@ model Lesson {
   videoDuration    Int? // duration in seconds
   videoFileName    String?
   videoSummary     String? // AI-generated summary of video content for quiz generation
-  displayOrder     Int                    @default(0)
-  status           String                 @default("draft")
-  createdAt        DateTime               @default(now())
-  updatedAt        DateTime               @updatedAt
+  displayOrder     Int                  @default(0)
+  status           String               @default("draft")
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
   lessonProgresses LessonProgress[]
   quizzes          Quiz[]
   exercises        Exercise[]
@@ -536,17 +555,17 @@ model AuditLog {
 
 // Exercise Template Models
 model ExerciseTemplate {
-  id          String            @id @default(uuid())
-  tenant      Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id          String     @id @default(uuid())
+  tenant      Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   tenantId    String
   name        String // e.g., "Bug Fix Exercise", "Code Completion"
   description String?
   structure   String // JSON: { title, description, highlightedTexts[], options[], codeTemplate }
   category    String // bug-fix, code-completion, code-refactoring, debug
-  status      String            @default("active") // active, archived
+  status      String     @default("active") // active, archived
   createdBy   String // user ID of teacher
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
   exercises   Exercise[]
 
   @@index([tenantId])
@@ -555,29 +574,29 @@ model ExerciseTemplate {
 
 // Hands-on Exercises
 model Exercise {
-  id                    String                    @id @default(uuid())
-  lesson                Lesson                    @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  id                    String               @id @default(uuid())
+  lesson                Lesson               @relation(fields: [lessonId], references: [id], onDelete: Cascade)
   lessonId              String
-  tenant                Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant                Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   tenantId              String
-  template              ExerciseTemplate?         @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  template              ExerciseTemplate?    @relation(fields: [templateId], references: [id], onDelete: SetNull)
   templateId            String?
   title                 String
   description           String?
   instructions          String
-  difficulty            String                    @default("medium") // beginner, intermediate, advanced
+  difficulty            String               @default("medium") // beginner, intermediate, advanced
   category              String // bug-fix, code-completion, code-refactoring, debug
   startingCode          String // initial code provided to learner
   expectedOutput        String? // expected result/output
   testCases             String // JSON: [{ input, expectedOutput, hidden: boolean }]
   highlightedSections   String // JSON: [{ start, end, hint, explanation }]
   multipleChoiceOptions String? // JSON: [{ id, text, isCorrect, explanation }]
-  status                String                    @default("draft") // draft, published, archived
+  status                String               @default("draft") // draft, published, archived
   createdBy             String // user ID of teacher
   attempts              ExerciseAttempt[]
   submissions           ExerciseSubmission[]
-  createdAt             DateTime                  @default(now())
-  updatedAt             DateTime                  @updatedAt
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
 
   @@index([lessonId])
   @@index([tenantId])
@@ -586,12 +605,12 @@ model Exercise {
 
 // User Exercise Submissions
 model ExerciseSubmission {
-  id             String                     @id @default(uuid())
-  exercise       Exercise                   @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  id             String           @id @default(uuid())
+  exercise       Exercise         @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
   exerciseId     String
-  lesson         Lesson                     @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  lesson         Lesson           @relation(fields: [lessonId], references: [id], onDelete: Cascade)
   lessonId       String
-  tenant         Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant         Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   tenantId       String
   userId         String // learner user ID
   submittedCode  String
@@ -600,12 +619,12 @@ model ExerciseSubmission {
   testResults    String // JSON: [{ testId, passed, error }]
   score          Float? // 0-100
   feedback       String? // AI-generated feedback from tutor
-  status         String                     @default("pending") // pending, reviewed, graded
-  submittedAt    DateTime                   @default(now())
+  status         String           @default("pending") // pending, reviewed, graded
+  submittedAt    DateTime         @default(now())
   reviewedAt     DateTime?
-  createdAt      DateTime                   @default(now())
-  updatedAt      DateTime                   @updatedAt
-  attempt        ExerciseAttempt?           @relation(fields: [attemptId], references: [id])
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  attempt        ExerciseAttempt? @relation(fields: [attemptId], references: [id])
   attemptId      String?
 
   @@index([exerciseId])
@@ -616,18 +635,18 @@ model ExerciseSubmission {
 
 // Track Exercise Attempts
 model ExerciseAttempt {
-  id           String                  @id @default(uuid())
-  exercise     Exercise                @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  id           String               @id @default(uuid())
+  exercise     Exercise             @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
   exerciseId   String
-  tenant       Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant       Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   tenantId     String
   userId       String // learner user ID
-  attemptCount Int                     @default(1)
+  attemptCount Int                  @default(1)
   submissions  ExerciseSubmission[]
-  startedAt    DateTime                @default(now())
+  startedAt    DateTime             @default(now())
   completedAt  DateTime?
-  passed       Boolean                 @default(false)
-  createdAt    DateTime                @default(now())
+  passed       Boolean              @default(false)
+  createdAt    DateTime             @default(now())
 
   @@index([exerciseId])
   @@index([userId])
@@ -636,19 +655,19 @@ model ExerciseAttempt {
 
 // AI Tutor Conversations
 model Conversation {
-  id          String      @id @default(uuid())
-  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  tenantId    String
-  course      Course?     @relation(fields: [courseId], references: [id], onDelete: SetNull)
-  courseId    String?
-  lesson      Lesson?     @relation(fields: [lessonId], references: [id], onDelete: SetNull)
-  lessonId    String?
-  title       String?     // auto-generated title from first message
-  topic       String?     // topic being discussed
-  messages    Message[]
-  userId      String      // student or teacher ID
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  id        String    @id @default(uuid())
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId  String
+  course    Course?   @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  courseId  String?
+  lesson    Lesson?   @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  lessonId  String?
+  title     String? // auto-generated title from first message
+  topic     String? // topic being discussed
+  messages  Message[]
+  userId    String // student or teacher ID
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   @@index([tenantId])
   @@index([courseId])
@@ -661,9 +680,9 @@ model Message {
   id             String       @id @default(uuid())
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   conversationId String
-  role           String       // "user" or "assistant"
+  role           String // "user" or "assistant"
   content        String       @db.Text // message content
-  metadata       Json?        // additional metadata (e.g., confidence, sources)
+  metadata       Json? // additional metadata (e.g., confidence, sources)
   createdAt      DateTime     @default(now())
 
   @@index([conversationId])
@@ -672,19 +691,19 @@ model Message {
 
 // Highlights/Annotations
 model Highlight {
-  id            String      @id @default(uuid())
-  tenant        Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id            String   @id @default(uuid())
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   tenantId      String
-  lesson        Lesson?     @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  lesson        Lesson?  @relation(fields: [lessonId], references: [id], onDelete: Cascade)
   lessonId      String?
-  text          String      @db.Text // highlighted text
-  startPosition Int?        // position in lesson content
-  endPosition   Int?        // position in lesson content
-  color         String      @default("yellow") // highlight color
-  notes         String?     @db.Text // user notes
-  userId        String      // user who created highlight
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  text          String   @db.Text // highlighted text
+  startPosition Int? // position in lesson content
+  endPosition   Int? // position in lesson content
+  color         String   @default("yellow") // highlight color
+  notes         String?  @db.Text // user notes
+  userId        String // user who created highlight
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@index([tenantId])
   @@index([lessonId])

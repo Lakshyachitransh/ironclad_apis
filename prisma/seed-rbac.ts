@@ -87,11 +87,14 @@ const PREDEFINED_PERMISSIONS = [
 
   // Live Classes Management Permissions
   { code: 'live-classes.create', name: 'Create live class', category: 'live-classes' },
+  { code: 'live-classes.read', name: 'Read live class details', category: 'live-classes' },
+  { code: 'live-classes.write', name: 'Write/Update live class', category: 'live-classes' },
+  { code: 'live-classes.list', name: 'List all live classes', category: 'live-classes' },
+  { code: 'live-classes.view', name: 'View live class', category: 'live-classes' },
   { code: 'live-classes.start', name: 'Start live class', category: 'live-classes' },
   { code: 'live-classes.end', name: 'End live class', category: 'live-classes' },
   { code: 'live-classes.join', name: 'Join live class', category: 'live-classes' },
   { code: 'live-classes.leave', name: 'Leave live class', category: 'live-classes' },
-  { code: 'live-classes.view', name: 'View live class', category: 'live-classes' },
   { code: 'live-classes.attendance', name: 'View/manage attendance', category: 'live-classes' },
   { code: 'live-classes.recording', name: 'Record live class', category: 'live-classes' },
 
@@ -155,7 +158,7 @@ const SYSTEM_ROLES: RolePermissionSet[] = [
   {
     code: 'tenant_admin',
     name: 'Tenant Admin',
-    description: 'Full control over tenant resources - courses, users, roles',
+    description: 'Full control over tenant resources - courses, users, roles, live classes',
     type: 'tenant',
     permissions: [
       // Users
@@ -171,13 +174,13 @@ const SYSTEM_ROLES: RolePermissionSet[] = [
       // Quizzes
       'quizzes.create', 'quizzes.update', 'quizzes.delete', 'quizzes.publish', 'quizzes.view', 'quizzes.results', 'quizzes.generate',
       // Live Classes
-      'live-classes.create', 'live-classes.start', 'live-classes.end', 'live-classes.attendance', 'live-classes.recording'
+      'live-classes.create', 'live-classes.read', 'live-classes.write', 'live-classes.list', 'live-classes.view', 'live-classes.start', 'live-classes.end', 'live-classes.attendance', 'live-classes.recording'
     ]
   },
   {
     code: 'training_manager',
     name: 'Training Manager',
-    description: 'Create and manage courses, modules, lessons, and quizzes',
+    description: 'Create and manage courses, modules, lessons, quizzes, and live classes',
     type: 'tenant',
     permissions: [
       // Courses
@@ -188,6 +191,8 @@ const SYSTEM_ROLES: RolePermissionSet[] = [
       'lessons.create', 'lessons.update', 'lessons.delete', 'lessons.upload-video', 'lessons.add-summary', 'lessons.view',
       // Quizzes
       'quizzes.create', 'quizzes.update', 'quizzes.delete', 'quizzes.publish', 'quizzes.view', 'quizzes.results', 'quizzes.generate',
+      // Live Classes
+      'live-classes.create', 'live-classes.read', 'live-classes.write', 'live-classes.list', 'live-classes.view', 'live-classes.start', 'live-classes.end', 'live-classes.attendance', 'live-classes.recording',
       // Users (view only)
       'users.list', 'users.view',
       // Roles (view only)
@@ -205,7 +210,7 @@ const SYSTEM_ROLES: RolePermissionSet[] = [
       // Lessons
       'lessons.view',
       // Live Classes
-      'live-classes.create', 'live-classes.start', 'live-classes.end', 'live-classes.attendance', 'live-classes.recording',
+      'live-classes.create', 'live-classes.read', 'live-classes.write', 'live-classes.list', 'live-classes.view', 'live-classes.start', 'live-classes.end', 'live-classes.attendance', 'live-classes.recording',
       // Users (view only)
       'users.list', 'users.view'
     ]
@@ -239,15 +244,38 @@ async function main() {
   const createdPermissions: Record<string, string> = {}; // code -> id mapping
 
   for (const perm of PREDEFINED_PERMISSIONS) {
-    const permission = await prisma.permission.upsert({
-      where: { code: perm.code },
-      update: {},
-      create: {
-        code: perm.code,
-        name: perm.name
+    // Parse resource and action from code
+    // Handle cases like: users.create, licenses.applications.create
+    const parts = perm.code.split('.');
+    const action = parts[parts.length - 1]; // Last part is the action
+    const resource = parts.slice(0, -1).join('.'); // Everything else is the resource
+    
+    try {
+      const permission = await prisma.permission.upsert({
+        where: { code: perm.code },
+        update: {},
+        create: {
+          code: perm.code,
+          name: perm.name,
+          resource: resource || 'general',
+          action: action || 'manage',
+          category: perm.category
+        }
+      });
+      createdPermissions[perm.code] = permission.id;
+    } catch (error: any) {
+      // If unique constraint error, just skip and get the existing one
+      if (error.code === 'P2002') {
+        const existing = await prisma.permission.findUnique({
+          where: { code: perm.code }
+        });
+        if (existing) {
+          createdPermissions[perm.code] = existing.id;
+        }
+      } else {
+        throw error;
       }
-    });
-    createdPermissions[perm.code] = permission.id;
+    }
   }
   console.log(`✅ ${PREDEFINED_PERMISSIONS.length} permissions created/verified\n`);
 

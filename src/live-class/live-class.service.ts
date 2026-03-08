@@ -18,28 +18,58 @@ export class LiveClassService {
     userTenantId: string,
     userRoles?: string[]
   ) {
+    console.log(`🎬 Starting Live Class Creation:`);
+    console.log(`   📝 Title: ${dto.title}`);
+    console.log(`   🏢 Tenant Name: ${dto.tenantName}`);
+    console.log(`   👤 User ID: ${userId}`);
+    console.log(`   🎭 Roles: ${userRoles?.join(', ')}`);
+
     // Look up tenant by name
     const tenant = await this.prisma.tenant.findUnique({
       where: { name: dto.tenantName }
     });
+    
     if (!tenant) {
+      console.log(`   ✗ ERROR: Tenant "${dto.tenantName}" not found in database`);
       throw new NotFoundException(`Tenant "${dto.tenantName}" not found`);
     }
+    
+    console.log(`   ✓ Tenant found: ${tenant.name} (ID: ${tenant.id})`);
 
-    // Skip tenant membership check for org_admin users
+    // Skip tenant membership check for platform_admin or org_admin users
+    const isPlatformAdmin = userRoles && Array.isArray(userRoles) && userRoles.includes('platform_admin');
     const isOrgAdmin = userRoles && Array.isArray(userRoles) && userRoles.includes('org_admin');
     
-    if (!isOrgAdmin) {
-      // Verify user belongs to this tenant (for non-org_admin users)
+    if (isPlatformAdmin) console.log(`   ⭐ User is platform_admin - skipping tenant check`);
+    if (isOrgAdmin) console.log(`   ⭐ User is org_admin - skipping tenant check`);
+    
+    if (!isPlatformAdmin && !isOrgAdmin) {
+      console.log(`   🔍 Checking tenant membership...`);
+      // Verify user belongs to this tenant (for regular tenant users)
+      // Check both UserTenant (legacy) and TenantUser (current) tables
       const userTenant = await this.prisma.userTenant.findFirst({
         where: {
           userId,
           tenantId: tenant.id
         }
       });
-      if (!userTenant) {
-        throw new ForbiddenException('You do not belong to this tenant');
+
+      const tenantUser = await this.prisma.tenantUser.findFirst({
+        where: {
+          id: userId,
+          tenantId: tenant.id
+        }
+      });
+
+      console.log(`   ✓ UserTenant check: ${userTenant ? 'FOUND' : 'NOT FOUND'}`);
+      console.log(`   ✓ TenantUser check: ${tenantUser ? 'FOUND' : 'NOT FOUND'}`);
+
+      if (!userTenant && !tenantUser) {
+        console.log(`   ✗ ERROR: User ${userId} does not belong to tenant ${tenant.id}`);
+        throw new ForbiddenException(`You do not belong to tenant "${dto.tenantName}". User ID: ${userId}, Tenant ID: ${tenant.id}`);
       }
+
+      console.log(`   ✓ User ${userId} is valid member of tenant ${tenant.id}`);
     }
 
     // Generate unique room ID
@@ -67,6 +97,11 @@ export class LiveClassService {
         }
       }
     });
+
+    console.log(`   ✅ Live Class Created Successfully:`);
+    console.log(`      ID: ${liveClass.id}`);
+    console.log(`      Room ID: ${liveClass.roomId}`);
+    console.log(`      Status: ${liveClass.status}`);
 
     return {
       id: liveClass.id,
@@ -126,6 +161,22 @@ export class LiveClassService {
       recordingUrl: liveClass.recordingUrl,
       createdAt: liveClass.createdAt
     };
+  }
+
+  /**
+   * Check if a live class room exists (for WebSocket validation)
+   * Used by WebSocket gateway to validate room before allowing join
+   */
+  async roomExists(roomId: string): Promise<boolean> {
+    try {
+      const liveClass = await this.prisma.liveClass.findUnique({
+        where: { roomId },
+        select: { id: true }
+      });
+      return !!liveClass;
+    } catch (error) {
+      return false;
+    }
   }
 
   /**
@@ -422,6 +473,149 @@ export class LiveClassService {
       id: updated.id,
       recordingUrl: updated.recordingUrl,
       message: 'Recording URL updated successfully'
+    };
+  }
+
+  /**
+   * List all users in a tenant (for selection in UI)
+   * Returns all active users that can be assigned to the live class
+   */
+  async listTenantUsers(tenantId: string) {
+    const users = await this.prisma.tenantUser.findMany({
+      where: {
+        tenantId,
+        status: 'active'
+      },
+      select: {
+        id: true,
+        email: true,
+        displayName: true,
+        tenantRoles: true,
+        createdAt: true
+      },
+      orderBy: {
+        displayName: 'asc'
+      }
+    });
+
+    return {
+      total: users.length,
+      users: users.map(user => ({
+        id: user.id,
+        email: user.email,
+        displayName: user.displayName,
+        roles: user.tenantRoles,
+        createdAt: user.createdAt
+      }))
+    };
+  }
+
+  /**
+   * Assign users to a live class
+   * Bulk-add participants to a live class
+   */
+  async assignUsersToLiveClass(
+    liveClassId: string,
+    userIds: string[],
+    tenantId: string,
+    role: string = 'participant'
+  ) {
+    // Validate live class exists and belongs to tenant
+    const liveClass = await this.prisma.liveClass.findUnique({
+      where: { id: liveClassId },
+      include: {
+        participants: true
+      }
+    });
+
+    if (!liveClass) {
+      throw new NotFoundException('Live class not found');
+    }
+
+    if (liveClass.tenantId !== tenantId) {
+      throw new ForbiddenException('Access denied');
+    }
+
+    // Validate all users exist in the tenant
+    const validUsers = await this.prisma.tenantUser.findMany({
+      where: {
+        id: { in: userIds },
+        tenantId,
+        status: 'active'
+      },
+      select: {
+        id: true,
+        email: true,
+        displayName: true
+      }
+    });
+
+    if (validUsers.length !== userIds.length) {
+      const invalidUserCount = userIds.length - validUsers.length;
+      throw new BadRequestException(
+        `${invalidUserCount} user(s) not found or not active in this tenant`
+      );
+    }
+
+    // Check capacity
+    const currentParticipants = liveClass.participants.filter(p => !p.leftAt).length;
+    const availableCapacity = liveClass.maxParticipants - currentParticipants;
+
+    if (userIds.length > availableCapacity) {
+      throw new BadRequestException(
+        `Cannot assign ${userIds.length} users. Only ${availableCapacity} slots available (class capacity: ${liveClass.maxParticipants})`
+      );
+    }
+
+    // Get already assigned users
+    const alreadyAssigned = liveClass.participants
+      .filter(p => !p.leftAt)
+      .map(p => p.tenantUserId);
+
+    // Filter out already assigned users
+    const usersToAssign = userIds.filter(userId => !alreadyAssigned.includes(userId));
+
+    if (usersToAssign.length === 0) {
+      return {
+        liveClassId,
+        assigned: 0,
+        skipped: userIds.length,
+        alreadyAssigned: userIds,
+        message: 'All users are already assigned to this live class'
+      };
+    }
+
+    // Assign users (create participant records)
+    const assignedUsers = await Promise.all(
+      usersToAssign.map(userId =>
+        this.prisma.liveClassParticipant.create({
+          data: {
+            liveClassId,
+            tenantUserId: userId,
+            role: role || 'participant'
+          },
+          select: {
+            id: true,
+            tenantUserId: true,
+            role: true,
+            joinedAt: true
+          }
+        })
+      )
+    );
+
+    return {
+      liveClassId,
+      assigned: assignedUsers.length,
+      skipped: alreadyAssigned.length,
+      alreadyAssigned,
+      participants: assignedUsers.map(p => ({
+        id: p.id,
+        userId: p.tenantUserId,
+        role: p.role,
+        joinedAt: p.joinedAt
+      })),
+      message: `Successfully assigned ${assignedUsers.length} user(s) to the live class`
     };
   }
 }

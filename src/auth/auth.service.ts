@@ -1,8 +1,9 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { addDays } from 'date-fns';
+import { RolesService } from '../roles/roles.service';
 
 type RefreshToken = {
   id: string;
@@ -19,58 +20,114 @@ type RefreshToken = {
 
 @Injectable()
 export class AuthService {
-  constructor(private prisma: PrismaService, private jwtService: JwtService) {}
+  constructor(
+    private prisma: PrismaService,
+    private jwtService: JwtService,
+    private rolesService: RolesService
+  ) {}
 
+  /**
+   * Validate user credentials
+   * Checks both PlatformUser and TenantUser tables
+   * Returns user object with type indicator
+   */
   async validateUser(email: string, password: string) {
-    const user = await this.prisma.user.findUnique({ where: { email } });
-    if (!user) return null;
-    const ok = await bcrypt.compare(password, user.passwordHash);
-    if (!ok) return null;
-    return user;
+    // Try platform user first
+    const platformUser = await this.prisma.platformUser.findUnique({ where: { email } });
+    if (platformUser) {
+      const ok = await bcrypt.compare(password, platformUser.passwordHash);
+      if (!ok) return null;
+      return { ...platformUser, userType: 'platform' };
+    }
+
+    // Try tenant user (check any tenant, will be validated in JWT)
+    const tenantUser = await this.prisma.tenantUser.findFirst({
+      where: { email },
+    });
+    if (tenantUser) {
+      const ok = await bcrypt.compare(password, tenantUser.passwordHash);
+      if (!ok) return null;
+      return { ...tenantUser, userType: 'tenant' };
+    }
+
+    return null;
   }
 
   /**
-   * Fetch user's tenant and roles from UserTenant
-   * Also includes platform-level roles from User.platformRoles
+   * Get user tenant and roles
+   * For PlatformUser: returns null tenantId and platformRoles
+   * For TenantUser: returns tenantId and tenantRoles
    */
   async getUserTenantAndRoles(userId: string) {
-    const user = await this.prisma.user.findUnique({
+    // Try platform user first
+    const platformUser = await this.prisma.platformUser.findUnique({
       where: { id: userId },
       select: { platformRoles: true }
     });
-    
-    // If user has platform roles, return those (no specific tenant)
-    if (user?.platformRoles && user.platformRoles.length > 0) {
-      return { tenantId: null, roles: user.platformRoles };
+
+    if (platformUser?.platformRoles && platformUser.platformRoles.length > 0) {
+      return { tenantId: null, roles: platformUser.platformRoles, userType: 'platform' };
     }
-    
-    // Otherwise, check for tenant-specific roles
-    const userTenant = await this.prisma.userTenant.findFirst({
-      where: { userId },
-      select: { tenantId: true, roles: true }
+
+    // Try tenant user
+    const tenantUser = await this.prisma.tenantUser.findUnique({
+      where: { id: userId },
+      select: { tenantId: true, tenantRoles: true }
     });
-    return userTenant ? { tenantId: userTenant.tenantId, roles: userTenant.roles } : { tenantId: null, roles: [] };
+
+    if (tenantUser) {
+      return { 
+        tenantId: tenantUser.tenantId, 
+        roles: tenantUser.tenantRoles, 
+        userType: 'tenant' 
+      };
+    }
+
+    return { tenantId: null, roles: [], userType: null };
   }
 
-  signAccessToken(user: { id: string; email: string; tenantId?: string | null; roles?: string[] }) {
+  async signAccessToken(user: { id: string; email: string; tenantId?: string | null; tenantName?: string | null; roles?: string[] }) {
+    // Gather permissions for all roles
+    let permissions: string[] = [];
+    if (user.roles && user.roles.length > 0) {
+      const permsSet = new Set<string>();
+      for (const role of user.roles) {
+        const rolePerms = await this.rolesService.getPermissionsForRole(role);
+        for (const rp of rolePerms) {
+          if (rp.permission && rp.permission.code) {
+            permsSet.add(rp.permission.code);
+          }
+        }
+      }
+      permissions = Array.from(permsSet);
+    }
     return this.jwtService.sign({ 
       sub: user.id, 
       id: user.id,
       email: user.email,
       tenantId: user.tenantId ?? null,
-      roles: user.roles ?? []
+      tenantName: user.tenantName ?? null,
+      roles: user.roles ?? [],
+      permissions
     });
   }
 
-  async createRefreshToken(userId: string, ip?: string, ua?: string) {
+  async createRefreshToken(userId: string, userType: 'platform' | 'tenant' = 'tenant', ip?: string, ua?: string) {
     const secret = process.env.JWT_ACCESS_SECRET!;
     const days = parseInt(process.env.JWT_REFRESH_EXPIRES_DAYS || '30', 10);
     const refresh = this.jwtService.sign({ sub: userId, email: undefined }, { expiresIn: `${days}d` });
     const hash = await bcrypt.hash(refresh, parseInt(process.env.BCRYPT_SALT_ROUNDS || '12', 10));
     const expiresAt = addDays(new Date(), days);
-    await this.prisma.refreshToken.create({
-      data: { userId, tokenHash: hash, expiresAt, ip, ua }
-    });
+    
+    // Create refresh token with appropriate foreign key based on user type
+    const data: any = { tokenHash: hash, expiresAt, ip, ua };
+    if (userType === 'platform') {
+      data.platformUserId = userId;
+    } else {
+      data.tenantUserId = userId;
+    }
+    
+    await this.prisma.refreshToken.create({ data });
     return refresh;
   }
 
@@ -79,11 +136,19 @@ export class AuthService {
       const payload: any = this.jwtService.verify(oldToken, { secret: process.env.JWT_ACCESS_SECRET });
       const userId = payload.sub;
 
+      // Find refresh tokens for the user (could be in any user type field)
       const tokens = await this.prisma.refreshToken.findMany({
-        where: { userId, revoked: false }
+        where: {
+          OR: [
+            { platformUserId: userId },
+            { tenantUserId: userId },
+            { userId: userId }
+          ],
+          revoked: false
+        }
       });
 
-      let matched: RefreshToken | null = null; // <- explicit typing
+      let matched: any = null;
       for (const t of tokens) {
         const ok = await bcrypt.compare(oldToken, t.tokenHash);
         if (ok) { matched = t; break; }
@@ -96,7 +161,9 @@ export class AuthService {
         data: { revoked: true }
       });
 
-      const newRefresh = await this.createRefreshToken(userId);
+      // Determine user type from matched token
+      const userType: 'platform' | 'tenant' = matched.platformUserId ? 'platform' : 'tenant';
+      const newRefresh = await this.createRefreshToken(userId, userType);
       return newRefresh;
     } catch (e) {
       throw new BadRequestException('invalid refresh token');
@@ -107,7 +174,19 @@ export class AuthService {
     try {
       const payload: any = this.jwtService.verify(token, { secret: process.env.JWT_ACCESS_SECRET });
       const userId = payload.sub;
-      const tokens = await this.prisma.refreshToken.findMany({ where: { userId, revoked: false }});
+      
+      // Find refresh tokens for the user (could be in any user type field)
+      const tokens = await this.prisma.refreshToken.findMany({ 
+        where: { 
+          OR: [
+            { platformUserId: userId },
+            { tenantUserId: userId },
+            { userId: userId }
+          ],
+          revoked: false
+        }
+      });
+      
       for (const t of tokens) {
         const ok = await bcrypt.compare(token, t.tokenHash);
         if (ok) {

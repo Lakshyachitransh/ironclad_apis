@@ -1,4 +1,4 @@
-import { IsEmail, IsString, IsOptional, MinLength, IsArray } from 'class-validator';
+import { IsEmail, IsString, IsOptional, MinLength, IsNotEmpty } from 'class-validator';
 
 export class CreateUserDto {
   @IsEmail()
@@ -13,9 +13,12 @@ export class CreateUserDto {
   displayName?: string;
 
   @IsString()
+  @IsNotEmpty()
   tenantName: string;
 
-  @IsOptional()
-  @IsArray()
-  roles?: string[];
+  @IsString()
+  @IsNotEmpty()
+  role: string; // Single role code (e.g., 'learner', 'trainer', 'tenant_admin')
 }
+
+

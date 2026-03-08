@@ -20,7 +20,7 @@ export class AuthController {
   @Post('register')
   @ApiOperation({ 
     summary: 'Register a new user',
-    description: 'Creates a new user account with email, password, and optional display name. Returns access and refresh tokens.'
+    description: 'Creates a new platform user account with email, password, and optional display name. Returns access and refresh tokens.'
   })
   @ApiBody({ type: RegisterDto })
   @ApiResponse({ 
@@ -31,8 +31,8 @@ export class AuthController {
         user: {
           id: '123e4567-e89b-12d3-a456-426614174000',
           email: 'user@example.com',
-          tenantId: '456e7890-e89b-12d3-a456-426614174000',
-          roles: ['learner']
+          displayName: 'User Name',
+          roles: ['platform_admin']
         },
         access_token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
         refresh_token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
@@ -41,8 +41,9 @@ export class AuthController {
   })
   @ApiResponse({ status: 400, description: 'User already exists or validation failed' })
   async register(@Body() dto: RegisterDto) {
-    const exists = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    const exists = await this.prisma.platformUser.findUnique({ where: { email: dto.email } });
     if (exists) throw new UnauthorizedException('user exists');
+    
     const salt = parseInt(process.env.BCRYPT_SALT_ROUNDS || '12', 10);
     const passwordHash = await bcrypt.hash(dto.password, salt);
     
@@ -52,22 +53,19 @@ export class AuthController {
       dto.email.toLowerCase().includes(domain)
     );
     
-    // Create user with platform_admin role if email domain matches
-    const user = await this.prisma.user.create({
+    // Create platform user with platform_admin role if email domain matches
+    const user = await this.prisma.platformUser.create({
       data: {
         email: dto.email,
         passwordHash,
-        displayName: dto.displayName,
-        platformRoles: isPlatformAdminDomain ? ['platform_admin'] : []
+        displayName: dto.displayName || null,
+        platformRoles: isPlatformAdminDomain ? ['platform_admin'] : ['viewer']
       }
     });
     
-    // Fetch tenant and roles
-    const { tenantId, roles } = await this.auth.getUserTenantAndRoles(user.id);
-    
     // Send welcome email asynchronously (don't wait for it)
     const displayName = dto.displayName || user.email.split('@')[0];
-    const tenantName = 'Ironclad';
+    const tenantName = 'Ironclad Platform';
     this.emailNotification.sendWelcomeEmail(
       user.email,
       displayName,
@@ -75,7 +73,7 @@ export class AuthController {
       tenantName
     ).then(async () => {
       // Mark as sent in database
-      await this.prisma.user.update({
+      await this.prisma.platformUser.update({
         where: { id: user.id },
         data: {
           welcomeEmailSent: true,
@@ -86,16 +84,15 @@ export class AuthController {
       console.error('Failed to send welcome email:', err);
     });
     
-    // optionally attach to a tenant etc. For bootstrap, use seed script.
-    const access = this.auth.signAccessToken({ id: user.id, email: user.email, tenantId, roles });
-    const refresh = await this.auth.createRefreshToken(user.id);
-    return { user: { id: user.id, email: user.email, tenantId, roles }, access_token: access, refresh_token: refresh };
+    const access = this.auth.signAccessToken({ id: user.id, email: user.email, tenantId: null, roles: user.platformRoles });
+    const refresh = await this.auth.createRefreshToken(user.id, 'platform');
+    return { user: { id: user.id, email: user.email, displayName: user.displayName, roles: user.platformRoles }, access_token: access, refresh_token: refresh };
   }
 
   @Post('login')
   @ApiOperation({ 
     summary: 'User login',
-    description: 'Authenticates user with email and password. Returns access and refresh tokens. Refresh token is also set as HTTP-only cookie.'
+    description: 'Authenticates user (platform or tenant) with email and password. Returns access and refresh tokens. Refresh token is also set as HTTP-only cookie.'
   })
   @ApiBody({ type: LoginDto })
   @ApiResponse({ 
@@ -107,27 +104,77 @@ export class AuthController {
         user: {
           id: '123e4567-e89b-12d3-a456-426614174000',
           email: 'user@example.com',
-          tenantId: '456e7890-e89b-12d3-a456-426614174000',
-          roles: ['learner']
+          tenantId: null,
+          roles: ['platform_admin']
         }
       }
     }
   })
   @ApiResponse({ status: 401, description: 'Invalid credentials' })
   async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
+    // Log login attempt
+    console.log('🔐 Login Attempt:');
+    console.log(`   📧 Email: ${dto.email}`);
+    console.log(`   🔑 Password: ${dto.password}`);
+    console.log('---');
+
     const user = await this.auth.validateUser(dto.email, dto.password);
     if (!user) throw new UnauthorizedException('invalid credentials');
     
     // Fetch tenant and roles
-    const { tenantId, roles } = await this.auth.getUserTenantAndRoles(user.id);
+    const { tenantId, roles, userType } = await this.auth.getUserTenantAndRoles(user.id);
     
-    const access = this.auth.signAccessToken({ id: user.id, email: user.email, tenantId, roles });
-    const refresh = await this.auth.createRefreshToken(user.id, undefined, undefined);
-    console.log(refresh)
-
-    // set HTTP-only cookie for refresh token (example)
+    // Fetch tenant name if tenantId exists
+    let tenantName: string | null = null;
+    if (tenantId) {
+      const tenant = await this.auth['prisma'].tenant.findUnique({
+        where: { id: tenantId },
+        select: { name: true }
+      });
+      tenantName = tenant?.name ?? null;
+    }
+    
+    // Get permissions for roles
+    let permissions: string[] = [];
+    if (roles && roles.length > 0) {
+      const permsSet = new Set<string>();
+      for (const role of roles) {
+        const rolePerms = await this.auth['rolesService'].getPermissionsForRole(role);
+        for (const rp of rolePerms) {
+          if (rp.permission && rp.permission.code) {
+            permsSet.add(rp.permission.code);
+          }
+        }
+      }
+      permissions = Array.from(permsSet);
+    }
+    
+    const access = await this.auth.signAccessToken({ id: user.id, email: user.email, tenantId, tenantName, roles });
+    const refresh = await this.auth.createRefreshToken(user.id, (userType || 'tenant') as 'platform' | 'tenant', undefined, undefined);
+    
+    // set HTTP-only cookie for refresh token
     res.cookie('refresh_token', refresh, { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * parseInt(process.env.JWT_REFRESH_EXPIRES_DAYS || '30', 10) });
-    return { access_token: access, user: { id: user.id, email: user.email, tenantId, roles } };
+    
+    console.log('✅ Login Success:');
+    console.log(`   👤 User ID: ${user.id}`);
+    console.log(`   🏢 Tenant ID: ${tenantId}`);
+    console.log(`   🏢 Tenant Name: ${tenantName}`);
+    console.log(`   🎭 Roles: ${roles.join(', ')}`);
+    console.log('---');
+    
+    return { 
+      access_token: access, 
+      user: { 
+        id: user.id, 
+        email: user.email, 
+        displayName: user.displayName,
+        tenantId, 
+        tenantName,
+        roles, 
+        permissions,
+        userType
+      } 
+    };
   }
 
   @Post('refresh')
@@ -165,7 +212,17 @@ export class AuthController {
     // Fetch tenant and roles
     const { tenantId, roles } = await this.auth.getUserTenantAndRoles(payload.sub);
     
-    const access = this.auth.signAccessToken({ id: payload.sub, email: payload.email, tenantId, roles });
+    // Fetch tenant name if tenantId exists
+    let tenantName: string | null = null;
+    if (tenantId) {
+      const tenant = await this.auth['prisma'].tenant.findUnique({
+        where: { id: tenantId },
+        select: { name: true }
+      });
+      tenantName = tenant?.name ?? null;
+    }
+    
+    const access = this.auth.signAccessToken({ id: payload.sub, email: payload.email, tenantId, tenantName, roles });
     res.cookie('refresh_token', newRefresh, { httpOnly: true });
     return { access_token: access };
   }

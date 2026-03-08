@@ -160,7 +160,7 @@ export class PermissionsService {
    * tenant_admin can assign only certain permissions
    */
   async canUserAssignPermission(userRoles: string[], permissionCode: string): Promise<boolean> {
-    // platform_admin can assign any permission
+    // platform_admin can assign any permission, skip further checks
     if (userRoles.includes('platform_admin')) {
       return true;
     }
@@ -183,7 +183,7 @@ export class PermissionsService {
   async getAssignablePermissionsForUser(userRoles: string[]) {
     const allPermissions = await this.prisma.permission.findMany();
 
-    // platform_admin can assign all
+    // platform_admin can assign all permissions, skip filtering
     if (userRoles.includes('platform_admin')) {
       return {
         assignableCount: allPermissions.length,

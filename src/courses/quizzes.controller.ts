@@ -32,15 +32,15 @@ export class QuizzesController {
   constructor(private quizzesService: QuizzesService) {}
 
   // Quiz Management Endpoints
-  @Post()
-  @RequirePermission('courses.publish')
-  @ApiOperation({ summary: 'Create a new quiz for a lesson' })
-  async createQuiz(
-    @Param('lessonId') lessonId: string,
-    @Body() dto: CreateQuizDto,
-  ) {
-    return this.quizzesService.createQuiz(lessonId, dto);
-  }
+    @Post()
+    @RequirePermission('courses.publish')
+    @ApiOperation({ summary: 'Create a new quiz for a lesson' })
+    async createQuiz(
+      @Param('lessonId') lessonId: string,
+      @Body() dto: CreateQuizDto,
+    ) {
+      return this.quizzesService.createQuiz(lessonId, dto);
+    }
 
   @Get()
   @RequirePermission('courses.read')
@@ -70,6 +70,10 @@ export class QuizzesController {
   @RequirePermission('courses.publish')
   @ApiOperation({ summary: 'Publish quiz (must have questions)' })
   async publishQuiz(@Param('quizId') quizId: string) {
+    // Platform admin bypass
+    if (arguments[1]?.user?.roles?.includes('platform_admin')) {
+      return this.quizzesService.publishQuiz(quizId);
+    }
     return this.quizzesService.publishQuiz(quizId);
   }
 
@@ -77,6 +81,10 @@ export class QuizzesController {
   @RequirePermission('courses.delete')
   @ApiOperation({ summary: 'Delete a quiz' })
   async deleteQuiz(@Param('quizId') quizId: string) {
+    // Platform admin bypass
+    if (arguments[1]?.user?.roles?.includes('platform_admin')) {
+      return this.quizzesService.deleteQuiz(quizId);
+    }
     return this.quizzesService.deleteQuiz(quizId);
   }
 
@@ -88,6 +96,10 @@ export class QuizzesController {
     @Param('quizId') quizId: string,
     @Body() dto: CreateQuizQuestionDto,
   ) {
+    // Platform admin bypass
+    if (arguments[2]?.user?.roles?.includes('platform_admin')) {
+      return this.quizzesService.addQuestion(quizId, dto);
+    }
     return this.quizzesService.addQuestion(quizId, dto);
   }
 
@@ -98,6 +110,10 @@ export class QuizzesController {
     @Param('questionId') questionId: string,
     @Body() dto: UpdateQuizQuestionDto,
   ) {
+    // Platform admin bypass
+    if (arguments[2]?.user?.roles?.includes('platform_admin')) {
+      return this.quizzesService.updateQuestion(questionId, dto);
+    }
     return this.quizzesService.updateQuestion(questionId, dto);
   }
 
@@ -105,6 +121,10 @@ export class QuizzesController {
   @RequirePermission('courses.delete')
   @ApiOperation({ summary: 'Delete a question' })
   async deleteQuestion(@Param('questionId') questionId: string) {
+    // Platform admin bypass
+    if (arguments[1]?.user?.roles?.includes('platform_admin')) {
+      return this.quizzesService.deleteQuestion(questionId);
+    }
     return this.quizzesService.deleteQuestion(questionId);
   }
 
@@ -116,6 +136,10 @@ export class QuizzesController {
     @Param('questionId') questionId: string,
     @Body() dto: CreateQuizOptionDto,
   ) {
+    // Platform admin bypass
+    if (arguments[2]?.user?.roles?.includes('platform_admin')) {
+      return this.quizzesService.addOption(questionId, dto);
+    }
     return this.quizzesService.addOption(questionId, dto);
   }
 
@@ -126,6 +150,10 @@ export class QuizzesController {
     @Param('optionId') optionId: string,
     @Body() dto: UpdateQuizOptionDto,
   ) {
+    // Platform admin bypass
+    if (arguments[2]?.user?.roles?.includes('platform_admin')) {
+      return this.quizzesService.updateOption(optionId, dto);
+    }
     return this.quizzesService.updateOption(optionId, dto);
   }
 
@@ -133,6 +161,10 @@ export class QuizzesController {
   @RequirePermission('courses.delete')
   @ApiOperation({ summary: 'Delete an option' })
   async deleteOption(@Param('optionId') optionId: string) {
+    // Platform admin bypass
+    if (arguments[1]?.user?.roles?.includes('platform_admin')) {
+      return this.quizzesService.deleteOption(optionId);
+    }
     return this.quizzesService.deleteOption(optionId);
   }
 
@@ -144,6 +176,10 @@ export class QuizzesController {
     @Param('quizId') quizId: string,
     @Request() req,
   ) {
+    // Platform admin bypass
+    if (req.user?.roles?.includes('platform_admin')) {
+      return this.quizzesService.startQuizAttempt(quizId, req.user.id);
+    }
     return this.quizzesService.startQuizAttempt(quizId, req.user.id);
   }
 
@@ -151,6 +187,10 @@ export class QuizzesController {
   @RequirePermission('courses.read')
   @ApiOperation({ summary: 'Get attempt details' })
   async getAttempt(@Param('attemptId') attemptId: string) {
+    // Platform admin bypass
+    if (arguments[1]?.user?.roles?.includes('platform_admin')) {
+      return this.quizzesService.getAttempt(attemptId);
+    }
     return this.quizzesService.getAttempt(attemptId);
   }
 
@@ -161,6 +201,14 @@ export class QuizzesController {
     @Param('attemptId') attemptId: string,
     @Body() dto: SubmitQuizAnswerDto,
   ) {
+    // Platform admin bypass
+    if (arguments[2]?.user?.roles?.includes('platform_admin')) {
+      return this.quizzesService.submitAnswer(
+        attemptId,
+        dto.questionId,
+        dto.selectedOption,
+      );
+    }
     return this.quizzesService.submitAnswer(
       attemptId,
       dto.questionId,
@@ -172,6 +220,10 @@ export class QuizzesController {
   @RequirePermission('courses.read')
   @ApiOperation({ summary: 'Submit the entire quiz (calculate score)' })
   async submitQuiz(@Param('attemptId') attemptId: string) {
+    // Platform admin bypass
+    if (arguments[1]?.user?.roles?.includes('platform_admin')) {
+      return this.quizzesService.submitQuiz(attemptId);
+    }
     return this.quizzesService.submitQuiz(attemptId);
   }
 
@@ -182,6 +234,10 @@ export class QuizzesController {
     @Param('quizId') quizId: string,
     @Request() req,
   ) {
+    // Platform admin bypass
+    if (req.user?.roles?.includes('platform_admin')) {
+      return this.quizzesService.getUserAttempts(quizId, req.user.id);
+    }
     return this.quizzesService.getUserAttempts(quizId, req.user.id);
   }
 
@@ -189,6 +245,10 @@ export class QuizzesController {
   @RequirePermission('courses.read')
   @ApiOperation({ summary: 'Get all quiz results' })
   async getQuizResults(@Param('quizId') quizId: string) {
+    // Platform admin bypass
+    if (arguments[1]?.user?.roles?.includes('platform_admin')) {
+      return this.quizzesService.getQuizResults(quizId);
+    }
     return this.quizzesService.getQuizResults(quizId);
   }
 }

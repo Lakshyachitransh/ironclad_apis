@@ -17,6 +17,10 @@ export class RolesGuard implements CanActivate {
     const req = context.switchToHttp().getRequest();
     const user = req.user;
     
+    // PLATFORM_ADMIN BYPASS: allow access to all endpoints, skip tenant checks
+    if (user?.roles && Array.isArray(user.roles) && user.roles.includes('platform_admin')) {
+      return true;
+    }
     // Try to get tenantId from headers, body, or query
     let tenantId = req.headers['x-tenant-id'] || req.body?.tenantId || req.query?.tenantId;
     

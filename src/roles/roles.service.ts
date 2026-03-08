@@ -7,7 +7,11 @@ export class RolesService {
 
   // Roles table CRUD
   async createRole(code: string, name: string, description: string) {
-    return this.prisma.role.create({ data: { code, name } });
+    return this.prisma.role.upsert({
+      where: { code },
+      update: { name, description },
+      create: { code, name, description }
+    });
   }
 
   async getRoles() {
@@ -176,4 +180,123 @@ export class RolesService {
 
     return perms.length > 0;
   }
-}
+
+  /**
+   * Get all roles used in a specific tenant (including custom tenant roles)
+   * Returns both system roles assigned to users AND custom roles created for the tenant
+   */
+  async getTenantRoles(tenantId: string) {
+    // 1) Get all TenantUsers in this tenant to find system roles being used
+    const tenantUsers = await this.prisma.tenantUser.findMany({
+      where: { tenantId },
+      select: { tenantRoles: true }
+    });
+
+    // 2) Collect all unique system role codes
+    const roleCodeSet = new Set<string>();
+    for (const user of tenantUsers) {
+      if (user.tenantRoles && Array.isArray(user.tenantRoles)) {
+        user.tenantRoles.forEach(role => roleCodeSet.add(role));
+      }
+    }
+
+    // 3) Get full role details for system roles
+    const systemRoles = await this.prisma.role.findMany({
+      where: { code: { in: Array.from(roleCodeSet) } },
+      include: { permissions: { include: { permission: true } } }
+    });
+
+    // 4) Get all custom tenant-specific roles from TenantRole table
+    const customRoles = await this.prisma.tenantRole.findMany({
+      where: { tenantId }
+    });
+
+    // 5) Combine and return both system and custom roles
+    return {
+      systemRoles,
+      customRoles,
+      total: systemRoles.length + customRoles.length
+    };
+  }
+
+  /**
+   * Create a tenant-specific role (only platform admin)
+   * Creates a custom role for a specific tenant
+   */
+  async createTenantRole(
+    tenantId: string,
+    roleCode: string,
+    roleName: string,
+    description?: string
+  ) {
+    // Verify tenant exists
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+    if (!tenant) {
+      throw new BadRequestException(`Tenant with ID "${tenantId}" not found`);
+    }
+
+    // Check if role code already exists for this tenant
+    const existing = await this.prisma.tenantRole.findUnique({
+      where: {
+        tenant_role_code_unique: {
+          tenantId,
+          roleCode
+        }
+      }
+    });
+
+    if (existing) {
+      throw new BadRequestException(
+        `Role with code "${roleCode}" already exists in tenant "${tenant.name}"`
+      );
+    }
+
+    // Create the tenant-specific role
+    const tenantRole = await this.prisma.tenantRole.create({
+      data: {
+        tenantId,
+        roleCode,
+        roleName,
+        description: description || `${roleName} role for ${tenant.name}`,
+        category: 'custom',
+        isSystem: false
+      }
+    });
+
+    return tenantRole;
+  }
+
+  /**
+   * Get all roles for a specific tenant (including custom tenant roles)
+   */
+  async getAllTenantRolesWithCustom(tenantId: string) {
+    // Get system roles used by users in this tenant
+    const tenantUsers = await this.prisma.tenantUser.findMany({
+      where: { tenantId },
+      select: { tenantRoles: true }
+    });
+
+    const roleCodeSet = new Set<string>();
+    for (const user of tenantUsers) {
+      if (user.tenantRoles && Array.isArray(user.tenantRoles)) {
+        user.tenantRoles.forEach(role => roleCodeSet.add(role));
+      }
+    }
+
+    // Get full details for system roles
+    const systemRoles = await this.prisma.role.findMany({
+      where: { code: { in: Array.from(roleCodeSet) } },
+      include: { permissions: { include: { permission: true } } }
+    });
+
+    // Get custom roles for this tenant (TenantRole table)
+    const customRoles = await this.prisma.tenantRole.findMany({
+      where: { tenantId }
+    });
+
+    return {
+      systemRoles,
+      customRoles,
+      total: systemRoles.length + customRoles.length
+    };
+  }}

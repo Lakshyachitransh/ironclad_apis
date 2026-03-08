@@ -1,3 +1,4 @@
+
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { OpenAI } from 'openai';
 import * as https from 'https';
@@ -34,6 +35,36 @@ export class VideoProcessingService {
   constructor() {
     this.openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
+    });
+  }
+
+  /**
+   * Downsize audio file using ffmpeg (mono, 16kHz, 64kbps)
+   * Returns path to downsized audio file
+   */
+  private async downsizeAudio(inputPath: string, outputPath: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      // Use the same ffmpeg path logic as extractAudioFromVideo
+      const ffmpegPaths = [
+        'ffmpeg',
+        'C:\\Users\\DELL\\AppData\\Local\\Microsoft\\WinGet\\Packages\\BtbN.FFmpeg.GPL.8.0_Microsoft.Winget.Source_8wekyb3d8bbwe\\ffmpeg-n8.0.1-17-g27a297f186-win64-gpl-8.0\\bin\\ffmpeg.exe',
+        'C:\\Users\\DELL\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\\ffmpeg-8.0.1-full_build\\bin\\ffmpeg.exe',
+      ];
+      let ffmpegPath = ffmpegPaths[0];
+      for (const p of ffmpegPaths) {
+        if (fs.existsSync(p)) {
+          ffmpegPath = p;
+          break;
+        }
+      }
+      const command = `"${ffmpegPath}" -i "${inputPath}" -ar 16000 -ac 1 -b:a 64k -y "${outputPath}"`;
+      child_process.exec(command, (error, stdout, stderr) => {
+        if (error) {
+          reject(new BadRequestException('Failed to downsize audio: ' + stderr));
+        } else {
+          resolve();
+        }
+      });
     });
   }
 
@@ -265,17 +296,85 @@ export class VideoProcessingService {
    */
   private async transcribeAudio(audioPath: string): Promise<string> {
     try {
-      const audioStream = fs.createReadStream(audioPath);
-
+      // Downsize audio before sending to Whisper
+      const downsizedPath = audioPath.replace(/(\.[^.]*)$/, '_small$1');
+      await this.downsizeAudio(audioPath, downsizedPath);
+      const stats = fs.statSync(downsizedPath);
+      const maxSize = 25 * 1024 * 1024; // 25MB
+      if (stats.size > maxSize) {
+        throw new BadRequestException(`Audio file size (${stats.size} bytes) exceeds OpenAI Whisper API limit of 25MB after downsizing.`);
+      }
+      const audioStream = fs.createReadStream(downsizedPath);
       const transcript = await this.openai.audio.transcriptions.create({
         file: audioStream,
         model: 'whisper-1',
         language: 'en',
       });
-
       return transcript.text;
     } catch (error) {
       throw new BadRequestException(`Failed to transcribe audio: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get transcript from video and return just the Whisper transcription
+   */
+  async getVideoTranscript(videoUrl: string): Promise<{ transcript: string }> {
+    let videoPath: string | null = null;
+    let audioPath: string | null = null;
+
+    try {
+      if (!videoUrl.startsWith('http')) {
+        throw new BadRequestException('Invalid video URL. Must be a valid HTTP/HTTPS URL');
+      }
+
+      const tempDir = os.tmpdir();
+      const timestamp = Date.now();
+
+      // Download video
+      videoPath = path.join(tempDir, `video_${timestamp}.mp4`);
+      console.log(`Downloading video from ${videoUrl}...`);
+      await this.downloadFile(videoUrl, videoPath);
+      console.log(`Video downloaded to ${videoPath}`);
+
+      // Extract audio
+      audioPath = path.join(tempDir, `audio_${timestamp}.mp3`);
+      console.log(`Extracting audio...`);
+      await this.extractAudioFromVideo(videoPath, audioPath);
+      console.log(`Audio extracted to ${audioPath}`);
+
+      // Transcribe audio with Whisper
+      console.log(`Transcribing audio with Whisper...`);
+      const transcript = await this.transcribeAudio(audioPath);
+      console.log(`Transcript obtained: ${transcript.substring(0, 100)}...`);
+
+      return {
+        transcript: transcript,
+      };
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      console.error('Transcript Extraction Error:', error);
+      throw new BadRequestException(
+        `Error extracting transcript: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    } finally {
+      // Cleanup temporary files
+      if (videoPath && fs.existsSync(videoPath)) {
+        try {
+          fs.unlinkSync(videoPath);
+        } catch (e) {
+          console.warn(`Failed to delete temp video file: ${e}`);
+        }
+      }
+      if (audioPath && fs.existsSync(audioPath)) {
+        try {
+          fs.unlinkSync(audioPath);
+        } catch (e) {
+          console.warn(`Failed to delete temp audio file: ${e}`);
+        }
+      }
     }
   }
 

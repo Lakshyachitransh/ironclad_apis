@@ -1,8 +1,9 @@
-import { Controller, Post, Body, Get, Param, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, Get, Param, UseGuards, Request, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiBody, ApiParam } from '@nestjs/swagger';
 import { RolesService } from './roles.service';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { CreatePermissionDto } from './dto/create-permission.dto';
+import { CreateTenantRoleDto } from './dto/create-tenant-role.dto';
 import { AssignRoleDto } from './dto/assign-role.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PermissionGuard } from '../common/guards/permission.guard';
@@ -66,6 +67,132 @@ export class RolesController {
   })
   listRoles() {
     return this.svc.getRoles();
+  }
+
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('roles.read')
+  @Get('my-tenant/all')
+  @ApiOperation({ 
+    summary: 'Get all roles in your current tenant',
+    description: `Convenience endpoint to get all roles (both system and custom) for the current user's tenant.
+    
+**Returns:**
+- System roles assigned to users in this tenant
+- Custom tenant-specific roles
+- All associated permissions for each role`
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'List of all roles in your tenant',
+    schema: {
+      example: {
+        systemRoles: [
+          {
+            id: 'role-uuid-1',
+            code: 'learner',
+            name: 'Learner',
+            description: 'Can access and complete courses',
+            category: 'system',
+            isSystem: true,
+            createdAt: '2025-11-01T00:00:00Z',
+            permissions: []
+          }
+        ],
+        customRoles: [
+          {
+            id: 'custom-role-uuid-1',
+            tenantId: 'tenant-uuid-1',
+            roleCode: 'course_manager',
+            roleName: 'Course Manager',
+            description: 'Can create and manage courses for the tenant',
+            category: 'custom',
+            isSystem: false,
+            createdAt: '2026-02-25T11:07:28.954Z',
+            updatedAt: '2026-02-25T11:07:28.954Z'
+          }
+        ],
+        total: 2
+      }
+    }
+  })
+  @ApiResponse({ status: 403, description: 'Tenant not found for current user' })
+  async getMyTenantRoles(@Request() req) {
+    // @ts-ignore
+    const user = req.user;
+    const tenantId = user?.tenantId;
+
+    if (!tenantId) {
+      throw new BadRequestException('❌ No tenant associated with your account');
+    }
+
+    return this.svc.getTenantRoles(tenantId);
+  }
+
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('roles.create')
+  @Post('my-tenant')
+  @ApiOperation({ 
+    summary: 'Create a custom role in your current tenant',
+    description: `Creates a custom role for your current tenant.
+    
+**Who can use this:**
+- Tenant Admin in their own tenant
+- Org Admin in their own tenant
+- Platform Admin (can create in any tenant via the specific tenant endpoint)
+
+The role code must be unique within the tenant.`
+  })
+  @ApiBody({ type: CreateTenantRoleDto })
+  @ApiResponse({ 
+    status: 201, 
+    description: 'Role created successfully',
+    schema: {
+      example: {
+        id: 'role-uuid-1',
+        tenantId: 'tenant-uuid',
+        roleCode: 'course_manager',
+        roleName: 'Course Manager',
+        description: 'Can create and manage courses for the tenant',
+        category: 'custom',
+        isSystem: false,
+        createdAt: '2025-11-25T10:00:00Z',
+        updatedAt: '2025-11-25T10:00:00Z'
+      }
+    }
+  })
+  @ApiResponse({ status: 400, description: 'Invalid input, role already exists, or tenant not found' })
+  @ApiResponse({ status: 403, description: 'Unauthorized: Only tenant admin, org admin, or platform admin can create roles' })
+  async createRoleInMyTenant(
+    @Request() req,
+    @Body() dto: CreateTenantRoleDto
+  ) {
+    // @ts-ignore
+    const user = req.user;
+    const userRoles = user?.roles || [];
+    const userTenantId = user?.tenantId;
+    const isPlatformAdmin = userRoles.includes('platform_admin');
+    const isTenantAdmin = userRoles.includes('tenant_admin');
+    const isOrgAdmin = userRoles.includes('org_admin');
+
+    if (!userTenantId) {
+      throw new BadRequestException('❌ No tenant associated with your account');
+    }
+
+    // Check authorization
+    const isAuthorized = isPlatformAdmin || isTenantAdmin || isOrgAdmin;
+    
+    if (!isAuthorized) {
+      throw new BadRequestException(
+        '❌ Unauthorized: Only tenant admin, org admin, or platform admin can create roles'
+      );
+    }
+
+    return this.svc.createTenantRole(
+      userTenantId,
+      dto.roleCode,
+      dto.roleName,
+      dto.description
+    );
   }
 
   @UseGuards(JwtAuthGuard, PermissionGuard)
@@ -198,5 +325,136 @@ export class RolesController {
   })
   getRolePermissions(@Param('roleCode') roleCode: string) {
     return this.svc.getPermissionsForRole(roleCode);
+  }
+
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('roles.read')
+  @Get('tenant/:tenantId')
+  @ApiOperation({ 
+    summary: 'Get all roles in a specific tenant',
+    description: `Returns both system roles assigned to users AND custom tenant-scoped roles.
+    
+**Access Control:**
+- **Platform Admin**: Can view all tenant roles
+- **Tenant Admin / Org Admin**: Can view roles only in their own tenant
+- **Other Users**: Can view roles only in their own tenant`
+  })
+  @ApiParam({ name: 'tenantId', type: String, description: 'Tenant ID' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'List of tenant roles (system and custom)',
+    schema: {
+      example: {
+        systemRoles: [
+          {
+            id: 'role-uuid-1',
+            code: 'learner',
+            name: 'Learner',
+            description: 'Can access and complete courses',
+            category: 'system',
+            isSystem: true,
+            createdAt: '2025-11-01T00:00:00Z',
+            permissions: []
+          }
+        ],
+        customRoles: [
+          {
+            id: 'custom-role-uuid-1',
+            tenantId: 'tenant-uuid-1',
+            roleCode: 'course_manager',
+            roleName: 'Course Manager',
+            description: 'Can create and manage courses for the tenant',
+            category: 'custom',
+            isSystem: false,
+            createdAt: '2026-02-25T11:07:28.954Z',
+            updatedAt: '2026-02-25T11:07:28.954Z'
+          }
+        ],
+        total: 2
+      }
+    }
+  })
+  @ApiResponse({ status: 403, description: 'You do not have access to this tenant' })
+  @ApiResponse({ status: 404, description: 'Tenant not found' })
+  async getTenantRoles(@Request() req, @Param('tenantId') tenantId: string) {
+    // @ts-ignore
+    const user = req.user;
+    const userRoles = user?.roles || [];
+    const userTenantId = user?.tenantId;
+    const isPlatformAdmin = userRoles.includes('platform_admin');
+    const isTenantAdmin = userRoles.includes('tenant_admin');
+    const isOrgAdmin = userRoles.includes('org_admin');
+
+    // Platform admin can access any tenant, others only their own tenant
+    if (!isPlatformAdmin && userTenantId !== tenantId) {
+      throw new BadRequestException('❌ You do not have access to view roles in this tenant');
+    }
+
+    return this.svc.getTenantRoles(tenantId);
+  }
+
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('roles.create')
+  @Post('tenant/:tenantId')
+  @ApiOperation({ 
+    summary: 'Create a custom role for a specific tenant',
+    description: `Creates a custom role for a specific tenant.
+    
+**Access Control:**
+- **Platform Admin**: Can create roles in any tenant
+- **Tenant Admin / Org Admin**: Can create roles only in their own tenant
+- **Other Users**: Cannot create roles
+
+The role code must be unique within the tenant. This role can then be assigned to tenant users.`
+  })
+  @ApiParam({ name: 'tenantId', type: String, description: 'Tenant ID' })
+  @ApiBody({ type: CreateTenantRoleDto })
+  @ApiResponse({ 
+    status: 201, 
+    description: 'Role created successfully',
+    schema: {
+      example: {
+        id: 'role-uuid-1',
+        tenantId: 'tenant-uuid',
+        roleCode: 'course_manager',
+        roleName: 'Course Manager',
+        description: 'Can create and manage courses for the tenant',
+        category: 'custom',
+        isSystem: false,
+        createdAt: '2025-11-25T10:00:00Z',
+        updatedAt: '2025-11-25T10:00:00Z'
+      }
+    }
+  })
+  @ApiResponse({ status: 400, description: 'Invalid input or role already exists' })
+  @ApiResponse({ status: 403, description: 'Unauthorized: Only tenant admin, org admin, or platform admin can create roles' })
+  async createTenantRole(
+    @Request() req,
+    @Param('tenantId') tenantId: string,
+    @Body() dto: CreateTenantRoleDto
+  ) {
+    // @ts-ignore
+    const user = req.user;
+    const userRoles = user?.roles || [];
+    const userTenantId = user?.tenantId;
+    const isPlatformAdmin = userRoles.includes('platform_admin');
+    const isTenantAdmin = userRoles.includes('tenant_admin');
+    const isOrgAdmin = userRoles.includes('org_admin');
+
+    // Check authorization
+    const isAuthorized = isPlatformAdmin || (isTenantAdmin && userTenantId === tenantId) || (isOrgAdmin && userTenantId === tenantId);
+    
+    if (!isAuthorized) {
+      throw new BadRequestException(
+        '❌ Unauthorized: Only tenant admin, org admin, or platform admin can create roles in this tenant'
+      );
+    }
+
+    return this.svc.createTenantRole(
+      tenantId,
+      dto.roleCode,
+      dto.roleName,
+      dto.description
+    );
   }
 }

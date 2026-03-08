@@ -6,6 +6,9 @@ import { QuizGeneratorService } from './services/quiz-generator.service';
 import { VideoTranscriptionService } from './services/video-transcription.service';
 import * as path from 'path';
 
+// AWS SigV4 enforces a 7-day maximum expiration for presigned URLs
+const MAX_PRESIGNED_URL_EXPIRY = 604800; // 7 days in seconds
+
 @Injectable()
 export class CoursesService {
   constructor(
@@ -19,7 +22,11 @@ export class CoursesService {
   private async verifyTenantAccess(tenantId: string, entityId: string, entityType: 'course' | 'module' | 'lesson') {
     if (entityType === 'course') {
       const course = await this.prisma.course.findUnique({ where: { id: entityId }});
-      if (!course || course.tenantId !== tenantId) {
+      if (!course) {
+        throw new BadRequestException('Course not found or access denied');
+      }
+      // If tenantId is null, skip tenant check (platform_admin bypass)
+      if (tenantId && course.tenantId !== tenantId) {
         throw new BadRequestException('Course not found or access denied');
       }
       return course;
@@ -28,7 +35,11 @@ export class CoursesService {
         where: { id: entityId },
         include: { course: true }
       });
-      if (!module || module.course.tenantId !== tenantId) {
+      if (!module) {
+        throw new BadRequestException('Module not found or access denied');
+      }
+      // If tenantId is null, skip tenant check (platform_admin bypass)
+      if (tenantId && module.course.tenantId !== tenantId) {
         throw new BadRequestException('Module not found or access denied');
       }
       return module;
@@ -37,7 +48,11 @@ export class CoursesService {
         where: { id: entityId },
         include: { module: { include: { course: true } } }
       });
-      if (!lesson || lesson.module.course.tenantId !== tenantId) {
+      if (!lesson) {
+        throw new BadRequestException('Lesson not found or access denied');
+      }
+      // If tenantId is null, skip tenant check (platform_admin bypass)
+      if (tenantId && lesson.module.course.tenantId !== tenantId) {
         throw new BadRequestException('Lesson not found or access denied');
       }
       return lesson;
@@ -53,7 +68,40 @@ export class CoursesService {
   }
 
   async get(id: string) {
-    return this.prisma.course.findUnique({ where: { id }, include: { modules: { include: { lessons: true } } }});
+    const course = await this.prisma.course.findUnique({ 
+      where: { id }, 
+      include: { modules: { include: { lessons: true } } }
+    });
+
+    if (!course) {
+      throw new BadRequestException('Course not found');
+    }
+
+    // Generate pre-signed URLs for all lessons with videos
+    const modulesWithPresignedUrls = await Promise.all(course.modules.map(async (module) => ({
+      ...module,
+      lessons: await Promise.all(module.lessons.map(async (lesson) => {
+        let presignedVideoUrl = null;
+        if (lesson.videoUrl) {
+          try {
+            const s3Key = this.s3Service.extractKeyFromUrl(lesson.videoUrl);
+            presignedVideoUrl = await this.s3Service.generatePresignedUrl(s3Key, MAX_PRESIGNED_URL_EXPIRY);
+          } catch (error) {
+            console.error('[Get Course] Error generating presigned URL:', error.message);
+            presignedVideoUrl = lesson.videoUrl;
+          }
+        }
+        return {
+          ...lesson,
+          presignedVideoUrl,
+        };
+      })),
+    })));
+
+    return {
+      ...course,
+      modules: modulesWithPresignedUrls,
+    };
   }
 
   async update(id: string, data: Partial<{ title: string; summary: string; status: string }>) {
@@ -82,11 +130,35 @@ export class CoursesService {
   }
 
   async getModulesByCourse(courseId: string) {
-    return this.prisma.module.findMany({
+    const modules = await this.prisma.module.findMany({
       where: { courseId },
       include: { lessons: true },
       orderBy: { displayOrder: 'asc' },
     });
+
+    // Generate pre-signed URLs for all lessons with videos
+    const result = await Promise.all(modules.map(async (module) => ({
+      ...module,
+      lessons: await Promise.all(module.lessons.map(async (lesson) => {
+        let presignedVideoUrl = null;
+        if (lesson.videoUrl) {
+          try {
+            const s3Key = this.s3Service.extractKeyFromUrl(lesson.videoUrl);
+            presignedVideoUrl = await this.s3Service.generatePresignedUrl(s3Key, 604800); // 7 days
+          } catch (error) {
+            console.error('Error generating pre-signed URL:', error);
+            presignedVideoUrl = lesson.videoUrl; // Fallback to original URL
+          }
+        }
+        return {
+          ...lesson,
+          presignedVideoUrl,
+        };
+      })),
+    })));
+
+    console.log('📦 [GET /courses/:id/modules] Returning modules with lessons');
+    return result;
   }
 
   async getModule(moduleId: string, tenantId?: string) {
@@ -99,11 +171,36 @@ export class CoursesService {
       throw new BadRequestException('Module not found');
     }
 
+    // If tenantId is provided and not null, check access; null tenantId = platform_admin (skip check)
     if (tenantId && module.course.tenantId !== tenantId) {
       throw new BadRequestException('You do not have access to this module');
     }
 
-    return module;
+    // Generate pre-signed URLs for all lessons with videos
+    const lessonsWithPresignedUrls = await Promise.all(module.lessons.map(async (lesson) => {
+      let presignedVideoUrl = null;
+      if (lesson.videoUrl) {
+        try {
+          const s3Key = this.s3Service.extractKeyFromUrl(lesson.videoUrl);
+          presignedVideoUrl = await this.s3Service.generatePresignedUrl(s3Key, MAX_PRESIGNED_URL_EXPIRY);
+        } catch (error) {
+          console.error('Error generating pre-signed URL:', error);
+          presignedVideoUrl = lesson.videoUrl; // Fallback to original URL
+        }
+      }
+      return {
+        ...lesson,
+        presignedVideoUrl,
+      };
+    }));
+
+    const result = {
+      ...module,
+      lessons: lessonsWithPresignedUrls,
+    };
+
+    console.log('📦 [GET /courses/:id/modules/:moduleId] Returning module with lessons:', JSON.stringify(result, null, 2));
+    return result;
   }
 
   async updateModule(moduleId: string, data: Partial<{ title: string; description: string; displayOrder: number }>, tenantId?: string) {
@@ -147,11 +244,54 @@ export class CoursesService {
       throw new BadRequestException('Lesson not found');
     }
 
+    // If tenantId is provided and not null, check access; null tenantId = platform_admin (skip check)
     if (tenantId && lesson.module.course.tenantId !== tenantId) {
       throw new BadRequestException('You do not have access to this lesson');
     }
 
-    return lesson;
+    // Generate pre-signed URL if video exists
+    let presignedVideoUrl = null;
+    let videoUrl = null;
+    
+    if (lesson.videoUrl) {
+      console.log('[GET Lesson] Video URL found:', lesson.videoUrl.substring(0, 80) + '...');
+      
+      try {
+        // Extract the S3 key from the stored URL
+        const s3Key = this.s3Service.extractKeyFromUrl(lesson.videoUrl);
+        
+        // Generate a fresh presigned URL (valid for 7 days)
+        console.log('[GET Lesson] Generating fresh presigned URL for key:', s3Key);
+        presignedVideoUrl = await this.s3Service.generatePresignedUrl(s3Key, MAX_PRESIGNED_URL_EXPIRY);
+        console.log('[GET Lesson] ✅ Generated presigned URL successfully');
+        
+        // Also return the base URL for reference
+        videoUrl = lesson.videoUrl;
+      } catch (error) {
+        console.error('[GET Lesson] ❌ Error generating presigned URL:', {
+          message: error?.message,
+          errorType: error?.code,
+          originalUrl: lesson.videoUrl
+        });
+        
+        // Fallback: Return the stored video URL as-is
+        // Note: This might not work if it's a private S3 URL
+        console.warn('[GET Lesson] ⚠️ Falling back to original video URL');
+        presignedVideoUrl = lesson.videoUrl;
+        videoUrl = lesson.videoUrl;
+      }
+    } else {
+      console.log('[GET Lesson] No video URL found for lesson:', lessonId);
+    }
+
+    const result = {
+      ...lesson,
+      videoUrl,
+      presignedVideoUrl,
+    };
+
+    console.log('[GET Lesson] ✅ Returning lesson with video URLs');
+    return result;
   }
 
   async updateLesson(lessonId: string, data: Partial<{ title: string; description: string; displayOrder: number }>, tenantId?: string) {
@@ -167,10 +307,30 @@ export class CoursesService {
       throw new BadRequestException('No file uploaded');
     }
 
-    // Validate file type
-    const allowedMimeTypes = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo'];
-    if (!allowedMimeTypes.includes(file.mimetype)) {
-      throw new BadRequestException('Invalid video format. Allowed formats: mp4, webm, mov, avi');
+    // Validate file type - check both MIME type and extension
+    const allowedMimeTypes = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo', 'application/octet-stream'];
+    const allowedExtensions = ['.mp4', '.webm', '.mov', '.avi', '.mkv'];
+    const fileExtension = path.extname(file.originalname).toLowerCase();
+    
+    const isValidMimeType = allowedMimeTypes.includes(file.mimetype);
+    const isValidExtension = allowedExtensions.includes(fileExtension);
+
+    if (!isValidMimeType && !isValidExtension) {
+      console.error('[Video Upload] Invalid video format:', {
+        filename: file.originalname,
+        mimetype: file.mimetype,
+        extension: fileExtension,
+        size: file.size
+      });
+      throw new BadRequestException(`Invalid video format. Allowed formats: ${allowedExtensions.join(', ')}`);
+    }
+
+    if (!isValidMimeType) {
+      console.warn('[Video Upload] MIME type not recognized, relying on file extension:', {
+        filename: file.originalname,
+        mimetype: file.mimetype,
+        extension: fileExtension
+      });
     }
 
     // Find lesson and verify access
@@ -190,11 +350,19 @@ export class CoursesService {
     try {
       // Generate unique key for S3
       const timestamp = Date.now();
-      const fileExtension = path.extname(file.originalname);
       const fileName = `${lessonId}-${timestamp}${fileExtension}`;
       const s3Key = `videos/${lesson.module.courseId}/${fileName}`;
 
-      // Upload to S3
+      console.log('[Video Upload] Uploading to S3:', {
+        lessonId,
+        fileName,
+        s3Key,
+        fileSize: file.size,
+        mimetype: file.mimetype,
+        extension: fileExtension
+      });
+
+      // Upload to S3 (returns pre-signed URL)
       const videoUrl = await this.s3Service.uploadFile(file, s3Key);
 
       // Convert videoDuration to integer if provided
@@ -210,11 +378,17 @@ export class CoursesService {
         },
       });
 
+      console.log('[Video Upload] Video uploaded successfully:', {
+        lessonId,
+        videoUrl: videoUrl.split('?')[0] // Log URL without presigned signature
+      });
+
       return {
         message: 'Video uploaded successfully to S3',
         lesson: updatedLesson,
         fileSize: file.size,
-        s3Url: videoUrl,
+        presignedUrl: videoUrl,
+        expiresIn: '1 year',
         note: 'Use POST /lessons/:lessonId/generate-summary-openai to generate video summary',
       };
     } catch (error) {
@@ -268,9 +442,23 @@ export class CoursesService {
     assignToUserIds: string[],
     assignedBy: string,
     dueDate?: Date,
-    courseLink?: string
+    user?: any // User object for authorization checks
   ) {
-    // Verify course exists and belongs to tenant
+    // Validate inputs
+    if (!tenantId) {
+      throw new BadRequestException('tenantId is required');
+    }
+    if (!courseId) {
+      throw new BadRequestException('courseId is required');
+    }
+    if (!assignedBy) {
+      throw new BadRequestException('assignedBy is required');
+    }
+    if (!assignToUserIds || !Array.isArray(assignToUserIds) || assignToUserIds.length === 0) {
+      throw new BadRequestException('assignToUserIds must be a non-empty array');
+    }
+
+    // Verify course exists and belongs to the specified tenant
     const course = await this.prisma.course.findUnique({ 
       where: { id: courseId },
       include: { modules: { include: { lessons: true } } }
@@ -280,38 +468,100 @@ export class CoursesService {
       throw new NotFoundException('Course not found');
     }
 
+    // Verify course belongs to the specified tenant
     if (course.tenantId !== tenantId) {
-      throw new BadRequestException('Course does not belong to this tenant');
+      throw new ForbiddenException(`Course does not belong to tenant ${tenantId}`);
+    }
+
+    // Authorization checks: Verify user can assign courses
+    if (user) {
+      const isPlatformAdmin = user.roles && user.roles.includes('platform_admin');
+      const isTenantAdmin = user.tenantId === tenantId && user.roles && (
+        user.roles.includes('tenant_admin') || 
+        user.roles.includes('org_admin')
+      );
+
+      if (!isPlatformAdmin && !isTenantAdmin) {
+        throw new ForbiddenException(
+          'Only platform_admin or tenant_admin can assign courses'
+        );
+      }
+
+      // If tenant admin, can only assign to users in their own tenant
+      if (!isPlatformAdmin && isTenantAdmin) {
+        // Already verified user.tenantId === tenantId above
+        // The assignment will be restricted to this tenant users via findMany query below
+      }
     }
 
     // Get total lesson count
-    const lessonsTotal = course.modules.reduce((sum, m) => sum + m.lessons.length, 0);
+    const lessonsTotal = Array.isArray(course.modules)
+      ? course.modules.reduce((sum, m) => sum + m.lessons.length, 0)
+      : 0;
 
-    // Fetch user details for email sending
-    const users = await this.prisma.user.findMany({
-      where: { id: { in: assignToUserIds } }
+    // Fetch TenantUser records for the given user IDs
+    // If tenant admin, verify all users belong to their tenant
+    const tenantUsers = await this.prisma.tenantUser.findMany({
+      where: { 
+        tenantId,
+        id: { in: assignToUserIds }
+      }
     });
 
-    const userMap = new Map(users.map(u => [u.id, u]));
+    if (!tenantUsers || tenantUsers.length === 0) {
+      throw new BadRequestException('No valid tenant users found for the provided user IDs');
+    }
 
-    // Assign course to each user
+    if (tenantUsers.length !== assignToUserIds.length) {
+      throw new BadRequestException('Some user IDs do not exist in this tenant');
+    }
+
+    // For each TenantUser, create or get a corresponding User record
+    const userIds: string[] = [];
+    for (const tenantUser of tenantUsers) {
+      let user = await this.prisma.user.findUnique({
+        where: { email: tenantUser.email }
+      });
+      
+      if (!user) {
+        // Create a User record if it doesn't exist
+        user = await this.prisma.user.create({
+          data: {
+            email: tenantUser.email,
+            passwordHash: tenantUser.passwordHash,
+            displayName: tenantUser.displayName,
+            status: tenantUser.status
+          }
+        });
+      }
+      userIds.push(user.id);
+    }
+
+    const tenantUserMap = new Map(tenantUsers.map((tu, idx) => [tu.id, { tenantUser: tu, userId: userIds[idx] }]));
+
+    // Assign course to each tenant user
     const assignments = await Promise.all(
-      assignToUserIds.map(async (userId) => {
+      assignToUserIds.map(async (tenantUserId, idx) => {
         // Check if already assigned
         const existing = await this.prisma.courseAssignment.findFirst({
           where: {
             courseId,
-            tenantUserId: userId,
+            tenantUserId,
             tenantId
           }
         });
 
         if (existing) {
           return {
-            userId,
+            userId: tenantUserId,
             status: 'already_assigned',
             assignmentId: existing.id
           };
+        }
+
+        const mapping = tenantUserMap.get(tenantUserId);
+        if (!mapping) {
+          throw new InternalServerErrorException('User mapping not found');
         }
 
         // Create course assignment
@@ -319,10 +569,13 @@ export class CoursesService {
           data: {
             tenantId,
             courseId,
-            tenantUserId: userId,
+            tenantUserId,
             assignedBy,
             dueDate: dueDate || null,
-            status: 'assigned'
+            status: 'assigned',
+            assignedAt: new Date(),
+            createdAt: new Date(),
+            updatedAt: new Date()
           }
         });
 
@@ -330,8 +583,8 @@ export class CoursesService {
         const userProgress = await this.prisma.userProgress.create({
           data: {
             tenantId,
-            userId,
-            tenantUserId: userId,
+            userId: mapping.userId,
+            tenantUserId,
             courseId,
             courseAssignmentId: assignment.id,
             lessonsTotal,
@@ -341,23 +594,22 @@ export class CoursesService {
           }
         });
 
-        // Send assignment email notification
-        const user = userMap.get(userId);
-        if (user?.email) {
+        // Send assignment email notification (without courseLink)
+        const tenantUser = mapping.tenantUser;
+        if (tenantUser?.email) {
           this.emailService.sendCourseAssignmentEmail(
-            user.email,
-            user.displayName || user.email,
+            tenantUser.email,
+            tenantUser.displayName || tenantUser.email,
             course.title,
-            dueDate,
-            courseLink
+            dueDate
           ).catch(error => {
             // Log error but don't fail assignment if email fails
-            console.error(`Failed to send email to ${user.email}:`, error);
+            console.error(`Failed to send email to ${tenantUser.email}:`, error);
           });
         }
 
         return {
-          userId,
+          userId: tenantUserId,
           status: 'assigned',
           assignmentId: assignment.id,
           progressId: userProgress.id
@@ -466,10 +718,21 @@ export class CoursesService {
   /**
    * Get all courses assigned to a user
    */
+  /**
+   * Get all courses assigned to a user
+   * The userId from JWT is already the TenantUser.id for tenant users
+   */
   async getUserAssignedCourses(userId: string, tenantId: string, status?: string) {
+    // If no tenantId, user is likely platform_admin - cannot view courses
+    if (!tenantId) {
+      return [];
+    }
+
+    // For tenant users, userId from JWT is already the TenantUser.id
+    // Query assignments directly using this ID
     const where: any = {
       tenantId,
-      assignedTo: userId
+      tenantUserId: userId  // userId here is already TenantUser.id
     };
 
     if (status) {
@@ -501,9 +764,11 @@ export class CoursesService {
     return Promise.all(
       assignments.map(async (assignment) => {
         const totalLessons = assignment.course.modules.reduce((sum, m) => sum + m.lessons.length, 0);
+        
+        // Query userProgress using the TenantUser ID from JWT
         const progress = await this.prisma.userProgress.findFirst({
           where: {
-            userId,
+            tenantUserId: userId,
             courseId: assignment.courseId
           }
         });
@@ -563,7 +828,8 @@ export class CoursesService {
       throw new NotFoundException('Lesson not found');
     }
 
-    if (lesson.module.course.tenantId !== tenantId) {
+    // If tenantId is provided and not null, check access; null tenantId = platform_admin (skip check)
+    if (tenantId && lesson.module.course.tenantId !== tenantId) {
       throw new BadRequestException('Access denied');
     }
 
@@ -724,7 +990,12 @@ export class CoursesService {
       include: { module: { include: { course: true } } }
     });
 
-    if (!lesson || lesson.module.course.tenantId !== tenantId) {
+    if (!lesson) {
+      throw new NotFoundException('Lesson not found or access denied');
+    }
+
+    // If tenantId is provided and not null, check access; null tenantId = platform_admin (skip check)
+    if (tenantId && lesson.module.course.tenantId !== tenantId) {
       throw new NotFoundException('Lesson not found or access denied');
     }
 
@@ -772,7 +1043,8 @@ export class CoursesService {
       throw new BadRequestException('Lesson does not belong to this course');
     }
 
-    if (lesson.module.course.tenantId !== tenantId) {
+    // If tenantId is provided and not null, check access; null tenantId = platform_admin (skip check)
+    if (tenantId && lesson.module.course.tenantId !== tenantId) {
       throw new ForbiddenException('Access denied to this course');
     }
 
@@ -851,7 +1123,12 @@ export class CoursesService {
       include: { module: { include: { course: true } } }
     });
 
-    if (!lesson || lesson.module.course.tenantId !== tenantId) {
+    if (!lesson) {
+      throw new NotFoundException('Lesson not found or access denied');
+    }
+
+    // If tenantId is provided and not null, check access; null tenantId = platform_admin (skip check)
+    if (tenantId && lesson.module.course.tenantId !== tenantId) {
       throw new NotFoundException('Lesson not found or access denied');
     }
 
@@ -879,7 +1156,12 @@ export class CoursesService {
       include: { module: { include: { course: true } } }
     });
 
-    if (!lesson || lesson.module.course.tenantId !== tenantId) {
+    if (!lesson) {
+      throw new NotFoundException('Lesson not found or access denied');
+    }
+
+    // If tenantId is provided and not null, check access; null tenantId = platform_admin (skip check)
+    if (tenantId && lesson.module.course.tenantId !== tenantId) {
       throw new NotFoundException('Lesson not found or access denied');
     }
 
@@ -913,7 +1195,12 @@ export class CoursesService {
       }
     });
 
-    if (!quiz || quiz.lesson.module.course.tenantId !== tenantId) {
+    if (!quiz) {
+      throw new NotFoundException('Quiz not found or access denied');
+    }
+
+    // If tenantId is provided and not null, check access; null tenantId = platform_admin (skip check)
+    if (tenantId && quiz.lesson.module.course.tenantId !== tenantId) {
       throw new NotFoundException('Quiz not found or access denied');
     }
 

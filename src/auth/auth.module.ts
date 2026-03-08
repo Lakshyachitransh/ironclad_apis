@@ -8,6 +8,7 @@ import { JwtStrategy } from './jwt.strategy';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { UsersModule } from '../users/users.module';
 import { CommonModule } from '../common/common.module';
+import { RolesModule } from '../roles/roles.module';
 import * as dotenv from 'dotenv';
 dotenv.config();
 
@@ -15,15 +16,15 @@ dotenv.config();
   imports: [
     PassportModule,
     JwtModule.register({
-    secret: process.env.JWT_ACCESS_SECRET,
-    signOptions: 
-      {
-    // prefer numeric seconds
-      expiresIn: Number(process.env.JWT_ACCESS_EXPIRES_IN ?? 900),
-    },
-  }),
+      secret: process.env.JWT_ACCESS_SECRET,
+      signOptions: {
+        // prefer numeric seconds
+        expiresIn: Number(process.env.JWT_ACCESS_EXPIRES_IN ?? 900),
+      },
+    }),
     UsersModule,
-    CommonModule
+    CommonModule,
+    RolesModule
   ],
   providers: [AuthService, PrismaService, JwtStrategy, JwtAuthGuard],
   controllers: [AuthController],

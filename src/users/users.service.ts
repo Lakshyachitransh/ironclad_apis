@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, ConflictException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../common/services/email.service';
 import { EmailNotificationService } from '../common/services/email-notification.service';
+import { RolesService } from '../roles/roles.service';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 
@@ -10,70 +11,74 @@ export class UsersService {
   constructor(
     private prisma: PrismaService,
     private emailService: EmailService,
-    private emailNotification: EmailNotificationService
+    private emailNotification: EmailNotificationService,
+    private rolesService: RolesService
   ) {}
 
   // inside UsersService class
 
 /**
- * Create user and attach to tenant in a single transaction.
- * Returns the created user (with id & email).
- * Throws if email already exists or user already attached to any tenant (enforces 1-user->1-tenant).
+ * Create tenant user and attach to tenant in a single transaction.
+ * User can only be assigned ONE role at a time.
+ * Returns the created tenant user (with id & email).
+ * Throws if email already exists in the tenant or role is invalid.
  */
 async createUserAndAttachToTenant(opts: {
   email: string;
   password: string;
   displayName?: string | null;
   tenantId: string;
-  roles?: string[];
+  role: string; // Single role code
   sendWelcomeEmail?: boolean;
 }) {
+  // Validate required fields
+  if (!opts.role || opts.role.trim() === '') {
+    throw new BadRequestException('Role is required and cannot be empty');
+  }
+
   const salt = parseInt(process.env.BCRYPT_SALT_ROUNDS || '12', 10);
   const passwordHash = await bcrypt.hash(opts.password, salt);
 
   try {
     const result = await this.prisma.$transaction(async (tx) => {
-      // 1) check email uniqueness
-      const existing = await tx.user.findUnique({ where: { email: opts.email } });
-      if (existing) {
-        // If user exists, check their tenant membership
-        const existingMembership = await tx.userTenant.findFirst({ where: { userId: existing.id } });
-        if (existingMembership) {
-          throw new BadRequestException('User already exists and is attached to a tenant');
-        }
-        // If user exists but without tenant, you might choose to attach them instead of failing.
-        // For now, we treat as conflict.
-        throw new BadRequestException('Email already exists');
+      // 1) Verify role exists in Role table
+      const roleExists = await tx.role.findUnique({ where: { code: opts.role } });
+      if (!roleExists) {
+        throw new BadRequestException(`Role "${opts.role}" does not exist`);
       }
 
-      // 2) create user
-      const created = await tx.user.create({
+      // 2) verify tenant exists
+      const tenant = await tx.tenant.findUnique({ where: { id: opts.tenantId } });
+      if (!tenant) throw new BadRequestException('Tenant not found');
+
+      // 3) check email uniqueness within tenant
+      const existing = await tx.tenantUser.findFirst({
+        where: {
+          email: opts.email,
+          tenantId: opts.tenantId,
+        },
+      });
+      if (existing) {
+        throw new BadRequestException('Email already exists in this tenant');
+      }
+
+      // 4) create tenant user with single role
+      const created = await tx.tenantUser.create({
         data: {
           email: opts.email,
           passwordHash,
           displayName: opts.displayName ?? null,
           status: 'active',
-        },
-      });
-
-      // 3) verify tenant exists
-      const tenant = await tx.tenant.findUnique({ where: { id: opts.tenantId } });
-      if (!tenant) throw new BadRequestException('Tenant not found');
-
-      // 4) create UserTenant linking the user
-      await tx.userTenant.create({
-        data: {
-          userId: created.id,
           tenantId: opts.tenantId,
-          roles: opts.roles ?? ['learner'],
+          tenantRoles: [opts.role], // Single role in array format
         },
       });
 
-      // return minimal created user with password for email sending
+      // return created user with password for email sending
       return { ...created, tempPassword: opts.password, tenant };
     });
 
-    // 5) Send welcome email asynchronously (don't wait for it)
+    // 4) Send welcome email asynchronously (don't wait for it)
     if (opts.sendWelcomeEmail !== false) {
       this.emailNotification.sendWelcomeEmail(
         result.email,
@@ -82,7 +87,7 @@ async createUserAndAttachToTenant(opts: {
         result.tenant.name
       ).then(async () => {
         // Mark as sent in database
-        await this.prisma.user.update({
+        await this.prisma.tenantUser.update({
           where: { id: result.id },
           data: {
             welcomeEmailSent: true,
@@ -108,8 +113,9 @@ async createUserAndAttachToTenant(opts: {
 
   /**
    * Create user and attach to tenant by tenant name.
+   * User can only be assigned ONE role at a time.
    * - Looks up tenant by name
-   * - Creates user and UserTenant relationship in single transaction
+   * - Creates user and user record in single transaction
    * - Returns full user details with tenant information
    */
   async createUserAndAttachToTenantByName(opts: {
@@ -117,45 +123,54 @@ async createUserAndAttachToTenant(opts: {
     password: string;
     displayName?: string | null;
     tenantName: string;
-    roles?: string[];
+    role: string; // Single role code
   }) {
+    // Validate required fields
+    if (!opts.role || (typeof opts.role === 'string' && opts.role.trim() === '')) {
+      throw new BadRequestException('Role is required and cannot be empty. Available roles: "tenant_admin", "instructor", "trainer", "learner", "training_manager"');
+    }
+
+    if (!opts.tenantName || (typeof opts.tenantName === 'string' && opts.tenantName.trim() === '')) {
+      throw new BadRequestException('Tenant name is required and cannot be empty');
+    }
+
     const salt = parseInt(process.env.BCRYPT_SALT_ROUNDS || '12', 10);
     const passwordHash = await bcrypt.hash(opts.password, salt);
 
     try {
       const result = await this.prisma.$transaction(async (tx) => {
-        // 1) Check email uniqueness
-        const existing = await tx.user.findUnique({ where: { email: opts.email } });
-        if (existing) {
-          const existingMembership = await tx.userTenant.findFirst({ where: { userId: existing.id } });
-          if (existingMembership) {
-            throw new BadRequestException('User already exists and is attached to a tenant');
-          }
-          throw new BadRequestException('Email already exists');
-        }
-
-        // 2) Look up tenant by name
+        // 1) Look up tenant by name
         const tenant = await tx.tenant.findUnique({ where: { name: opts.tenantName } });
         if (!tenant) {
           throw new BadRequestException(`Tenant "${opts.tenantName}" not found`);
         }
 
-        // 3) Create user
-        const created = await tx.user.create({
+        // 2) Verify role exists in Role table
+        const roleExists = await tx.role.findUnique({ where: { code: opts.role } });
+        if (!roleExists) {
+          throw new BadRequestException(`Role "${opts.role}" does not exist`);
+        }
+
+        // 3) Check email uniqueness within tenant
+        const existing = await tx.tenantUser.findFirst({
+          where: {
+            email: opts.email,
+            tenantId: tenant.id,
+          },
+        });
+        if (existing) {
+          throw new BadRequestException('Email already exists in this tenant');
+        }
+
+        // 4) Create tenant user with single role
+        const created = await tx.tenantUser.create({
           data: {
             email: opts.email,
             passwordHash,
             displayName: opts.displayName ?? null,
             status: 'active',
-          },
-        });
-
-        // 4) Create UserTenant linking the user
-        const userTenant = await tx.userTenant.create({
-          data: {
-            userId: created.id,
             tenantId: tenant.id,
-            roles: opts.roles ?? ['learner'],
+            tenantRoles: [opts.role], // Single role in array format
           },
         });
 
@@ -168,8 +183,8 @@ async createUserAndAttachToTenant(opts: {
           createdAt: created.createdAt,
           tenantName: tenant.name,
           tenantId: tenant.id,
-          roles: userTenant.roles,
-          userTenantId: userTenant.id,
+          tenantRoles: created.tenantRoles,
+          updatedAt: created.updatedAt,
         };
       });
 
@@ -181,7 +196,7 @@ async createUserAndAttachToTenant(opts: {
         result.tenantName
       ).then(async () => {
         // Mark as sent in database
-        await this.prisma.user.update({
+        await this.prisma.tenantUser.update({
           where: { id: result.id },
           data: {
             welcomeEmailSent: true,
@@ -204,9 +219,10 @@ async createUserAndAttachToTenant(opts: {
 
   /**
    * Bulk create users from CSV
-   * CSV format: email, displayName, password (optional), roles (optional)
+   * CSV format: email, displayName, password (optional), role (required - single role per user)
+   * Each user gets assigned exactly one role
    */
-  async bulkCreateUsersFromCsv(csvContent: string, tenantId: string, defaultRoles: string[] = ['learner']) {
+  async bulkCreateUsersFromCsv(csvContent: string, tenantId: string, defaultRole: string = 'learner') {
     const lines = csvContent.trim().split('\n').filter(line => line.trim());
     
     if (lines.length < 2) {
@@ -218,7 +234,7 @@ async createUserAndAttachToTenant(opts: {
     const emailIdx = headers.indexOf('email');
     const nameIdx = headers.indexOf('displayname');
     const passwordIdx = headers.indexOf('password');
-    const rolesIdx = headers.indexOf('roles');
+    const roleIdx = headers.indexOf('role');
 
     if (emailIdx === -1) {
       throw new BadRequestException('CSV must have an "email" column');
@@ -247,23 +263,33 @@ async createUserAndAttachToTenant(opts: {
 
         const displayName = nameIdx !== -1 ? values[nameIdx] : `User ${i}`;
         const password = passwordIdx !== -1 && values[passwordIdx] ? values[passwordIdx] : this.generateRandomPassword();
-        const rolesStr = rolesIdx !== -1 ? values[rolesIdx] : null;
-        const roles = rolesStr ? rolesStr.split('|').map(r => r.trim()).filter(r => r) : defaultRoles;
+        const role = roleIdx !== -1 && values[roleIdx] ? values[roleIdx].trim() : defaultRole;
 
-        // Create user
+        // Validate role exists
+        const roleExists = await this.prisma.role.findUnique({ where: { code: role } });
+        if (!roleExists) {
+          errors.push({ 
+            row: i + 1, 
+            email,
+            error: `Role "${role}" does not exist` 
+          });
+          continue;
+        }
+
+        // Create user with single role
         const user = await this.createUserAndAttachToTenant({
           email,
           password,
           displayName,
           tenantId,
-          roles,
+          role, // Single role
         });
 
         results.push({
           email,
           displayName,
           userId: user.id,
-          roles,
+          role, // Single role
           password, // return generated password only
           status: 'created'
         });
@@ -294,124 +320,132 @@ async createUserAndAttachToTenant(opts: {
     return crypto.randomBytes(8).toString('hex') + 'Aa1!';
   }
 
-  // find user by id
+  // find user by id (searches both TenantUser and PlatformUser)
   async findById(id: string) {
-    return this.prisma.user.findUnique({ where: { id } });
+    // Try tenant user first
+    const tenantUser = await this.prisma.tenantUser.findUnique({ where: { id } });
+    if (tenantUser) return { ...tenantUser, userType: 'tenant' };
+
+    // Try platform user
+    const platformUser = await this.prisma.platformUser.findUnique({ where: { id } });
+    if (platformUser) return { ...platformUser, userType: 'platform' };
+
+    return null;
   }
 
-  // find user by email
+  // find user by email (searches both TenantUser and PlatformUser)
   async findByEmail(email: string) {
-    return this.prisma.user.findUnique({ where: { email } });
+    // Try platform user first (must be unique)
+    const platformUser = await this.prisma.platformUser.findUnique({ where: { email } });
+    if (platformUser) return { ...platformUser, userType: 'platform' };
+
+    // Try tenant user (search all tenants)
+    const tenantUser = await this.prisma.tenantUser.findFirst({ where: { email } });
+    if (tenantUser) return { ...tenantUser, userType: 'tenant' };
+
+    return null;
   }
 
   // create a user (no tenant linkage) — returns created user
+  /**
+   * @deprecated use createUserAndAttachToTenant or createPlatformUser instead
+   */
   async createUser(email: string, password: string, displayName?: string) {
-    const salt = parseInt(process.env.BCRYPT_SALT_ROUNDS || '12', 10);
-    const hash = await bcrypt.hash(password, salt);
-    try {
-      const user = await this.prisma.user.create({
-        data: { email, passwordHash: hash, displayName },
-      });
-      return user;
-    } catch (err: any) {
-      if (err?.code === 'P2002' && String(err.meta?.target)?.includes('email')) {
-        throw new ConflictException('Email already exists');
-      }
-      throw err;
-    }
+    throw new BadRequestException('Use createUserAndAttachToTenant() or createPlatformUser() instead');
   }
 
   /**
-   * Attach a user to a tenant.
-   * Enforces "one user -> one tenant" rule by checking any existing membership.
-   * Optionally accepts initial roles (role codes) which will be validated by the caller.
+   * @deprecated TenantUser is created directly with tenantId, no need to attach separately
    */
   async attachUserToTenant(userId: string, tenantId: string, roles: string[] = ['learner']) {
-    // 1) check if user exists
-    const user = await this.prisma.user.findUnique({ where: { id: userId }, include: { tenants: true }});
-    if (!user) throw new BadRequestException('User not found');
-
-    // 2) enforce single-tenant-per-user rule
-    if (Array.isArray(user.tenants) && user.tenants.length > 0) {
-      // user already attached to a tenant — deny
-      throw new BadRequestException('User already attached to a tenant');
-    }
-
-    // 3) ensure tenant exists
-    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId }});
-    if (!tenant) throw new BadRequestException('Tenant not found');
-
-    // 4) create UserTenant entry
-    const userTenant = await this.prisma.userTenant.create({
-      data: {
-        userId,
-        tenantId,
-        roles,
-      },
-    });
-
-    return userTenant;
+    throw new BadRequestException('Use createUserAndAttachToTenant() instead. TenantUser includes tenantId by design.');
   }
 
   /**
-   * List users for tenant (returns user + roles)
+   * List tenant users for a specific tenant
    */
   async listUsers(tenantId: string) {
-    const rows = await this.prisma.userTenant.findMany({
+    const users = await this.prisma.tenantUser.findMany({
       where: { tenantId },
-      include: { user: true },
+      select: {
+        id: true,
+        email: true,
+        displayName: true,
+        status: true,
+        tenantRoles: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
     });
-    return rows;
+    return users;
   }
 
   /**
-   * Get the tenant membership and role codes for a user
-   * Returns null if user has no tenant membership
+   * Get tenant user by ID and tenant
    */
-  async getUserTenantMembership(userId: string) {
-    const ut = await this.prisma.userTenant.findFirst({
-      where: { userId },
+  async getTenantUser(userId: string, tenantId: string) {
+    return await this.prisma.tenantUser.findFirst({
+      where: {
+        id: userId,
+        tenantId,
+      },
     });
-    return ut;
   }
 
   /**
    * Delete a user by ID
-   * Removes UserTenant relationship and the user record
-   * Performs cascade deletion in transaction
+   * Can delete either a TenantUser or PlatformUser
    */
   async deleteUserById(userId: string) {
     try {
-      const result = await this.prisma.$transaction(async (tx) => {
-        // 1) Find user to ensure it exists
-        const user = await tx.user.findUnique({ where: { id: userId } });
-        if (!user) {
-          throw new BadRequestException('User not found');
-        }
+      // Try to delete as TenantUser first
+      const tenantUser = await this.prisma.tenantUser.findUnique({
+        where: { id: userId },
+      });
 
-        // 2) Delete UserTenant relationships
-        await tx.userTenant.deleteMany({
-          where: { userId },
-        });
-
-        // 3) Delete the user
-        const deleted = await tx.user.delete({
+      if (tenantUser) {
+        const deleted = await this.prisma.tenantUser.delete({
           where: { id: userId },
         });
 
         return {
           success: true,
-          message: `User ${deleted.email} deleted successfully`,
+          message: `Tenant user ${deleted.email} deleted successfully`,
           deletedUser: {
             id: deleted.id,
             email: deleted.email,
             displayName: deleted.displayName,
+            type: 'tenant',
             deletedAt: new Date().toISOString(),
           },
         };
+      }
+
+      // Try to delete as PlatformUser
+      const platformUser = await this.prisma.platformUser.findUnique({
+        where: { id: userId },
       });
 
-      return result;
+      if (platformUser) {
+        const deleted = await this.prisma.platformUser.delete({
+          where: { id: userId },
+        });
+
+        return {
+          success: true,
+          message: `Platform user ${deleted.email} deleted successfully`,
+          deletedUser: {
+            id: deleted.id,
+            email: deleted.email,
+            displayName: deleted.displayName,
+            type: 'platform',
+            deletedAt: new Date().toISOString(),
+          },
+        };
+      }
+
+      throw new BadRequestException('User not found');
     } catch (err) {
       if (err instanceof BadRequestException) throw err;
       throw new BadRequestException('Failed to delete user: ' + (err?.message || 'Unknown error'));
@@ -423,7 +457,7 @@ async createUserAndAttachToTenant(opts: {
    * Public endpoint accessible to anyone
    */
   async getAllUsers() {
-    // Fetch all tenant users
+    // Fetch all tenant users directly from TenantUser table
     const tenantUsers = await this.prisma.tenantUser.findMany({
       select: {
         id: true,
@@ -438,7 +472,7 @@ async createUserAndAttachToTenant(opts: {
       orderBy: { createdAt: 'desc' },
     });
 
-    // Fetch all platform users
+    // Fetch all platform users directly from PlatformUser table
     const platformUsers = await this.prisma.platformUser.findMany({
       select: {
         id: true,
@@ -465,19 +499,34 @@ async createUserAndAttachToTenant(opts: {
 
   /**
    * Create a platform user (admin user)
+   * User can only be assigned ONE platform role at a time
    * Platform users are not tied to any tenant
    */
   async createPlatformUser(opts: {
     email: string;
     password: string;
     displayName: string;
-    platformRoles: string[];
+    platformRole: string; // Single platform role code
   }) {
+    // Validate required fields
+    if (!opts.platformRole || opts.platformRole.trim() === '') {
+      throw new BadRequestException('Platform role is required and cannot be empty');
+    }
+
     const salt = parseInt(process.env.BCRYPT_SALT_ROUNDS || '12', 10);
     const passwordHash = await bcrypt.hash(opts.password, salt);
 
     try {
-      // Check if email already exists in platform users
+      // 1) Check if role exists in Role table
+      const roleExists = await this.prisma.role.findUnique({
+        where: { code: opts.platformRole },
+      });
+
+      if (!roleExists) {
+        throw new BadRequestException(`Role "${opts.platformRole}" does not exist`);
+      }
+
+      // 2) Check if email already exists in platform users
       const existing = await this.prisma.platformUser.findUnique({
         where: { email: opts.email },
       });
@@ -486,18 +535,18 @@ async createUserAndAttachToTenant(opts: {
         throw new ConflictException('Platform user with this email already exists');
       }
 
-      // Create platform user
+      // 3) Create platform user with single role
       const created = await this.prisma.platformUser.create({
         data: {
           email: opts.email,
           passwordHash,
           displayName: opts.displayName,
           status: 'active',
-          platformRoles: opts.platformRoles,
+          platformRoles: [opts.platformRole], // Single role in array format
         },
       });
 
-      // Send welcome email asynchronously (don't wait for it)
+      // 4) Send welcome email asynchronously (don't wait for it)
       const tenantName = 'Ironclad Platform';
       this.emailNotification.sendWelcomeEmail(
         created.email,
@@ -527,7 +576,7 @@ async createUserAndAttachToTenant(opts: {
         updatedAt: created.updatedAt,
       };
     } catch (err) {
-      if (err instanceof ConflictException) throw err;
+      if (err instanceof ConflictException || err instanceof BadRequestException) throw err;
       throw new BadRequestException('Failed to create platform user: ' + (err?.message || 'Unknown error'));
     }
   }

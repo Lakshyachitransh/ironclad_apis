@@ -34,14 +34,6 @@ export class AssignCourseDto {
   @IsDateString()
   dueDate?: string;
 
-  @ApiProperty({ 
-    description: 'Link to the course (for email notification)',
-    example: 'https://yourapp.com/courses/123e4567-e89b-12d3-a456-426614174000',
-    required: false
-  })
-  @IsOptional()
-  @IsUrl()
-  courseLink?: string;
 }
 
 export class AssignBulkCourseDto {

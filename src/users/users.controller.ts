@@ -65,13 +65,13 @@ export class UsersController {
   @ApiBody({
     schema: {
       type: 'object',
-      required: ['email', 'password', 'tenantName'],
+      required: ['email', 'password', 'tenantName', 'role'],
       properties: {
         email: {
           type: 'string',
           format: 'email',
           example: 'newuser@example.com',
-          description: 'User email address (must be unique)'
+          description: 'User email address (must be unique within tenant)'
         },
         password: {
           type: 'string',
@@ -87,13 +87,12 @@ export class UsersController {
         tenantName: {
           type: 'string',
           example: 'Tech Academy',
-          description: 'Name of the tenant to attach user to'
+          description: 'Name of the tenant to attach user to (required)'
         },
-        roles: {
-          type: 'array',
-          items: { type: 'string' },
-          example: ['learner', 'viewer'],
-          description: 'Tenant roles for the user (optional, defaults to [\"learner\"])'
+        role: {
+          type: 'string',
+          example: 'learner',
+          description: 'Tenant role for the user (required). Available roles: "tenant_admin", "instructor", "trainer", "learner", "training_manager"'
         }
       }
     }
@@ -128,6 +127,14 @@ export class UsersController {
   @ApiResponse({ status: 400, description: 'Invalid input, user already exists, or tenant not found' })
   @ApiResponse({ status: 403, description: 'Insufficient permissions' })
   async create(@Body() dto: CreateUserDto, @Req() req: Request) {
+    // Log the incoming request
+    console.log('👤 Creating User:');
+    console.log(`   📧 Email: ${dto.email}`);
+    console.log(`   🏢 Tenant: ${dto.tenantName}`);
+    console.log(`   🎭 Role: ${dto.role}`);
+    console.log(`   👤 Display Name: ${dto.displayName || 'N/A'}`);
+    console.log('---');
+
     // req.user should be set by JwtAuthGuard and validated by TenantAdminGuard
     // @ts-ignore
     const actor = req.user as JwtUser | undefined;
@@ -143,7 +150,7 @@ export class UsersController {
       password: dto.password,
       displayName: dto.displayName,
       tenantName: dto.tenantName,
-      roles: dto.roles ?? ['learner'],
+      role: dto.role,
     });
 
     return user;
@@ -205,11 +212,11 @@ export class UsersController {
 
     const rows = await this.users.listUsers(actor.tenantId);
     return rows.map((r) => ({
-      id: r.user.id,
-      email: r.user.email,
-      displayName: r.user.displayName,
-      roles: r.roles,
-      createdAt: r.user.createdAt,
+      id: r.id,
+      email: r.email,
+      displayName: r.displayName,
+      roles: r.tenantRoles,
+      createdAt: r.createdAt,
     }));
   }
 
@@ -221,16 +228,18 @@ export class UsersController {
    */
   @UseGuards(JwtAuthGuard, PermissionGuard)
   @RequirePermission('admin.manage')
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('admin.manage')
   @Post('platform')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary: 'Create a platform user',
-    description: 'Creates a platform-level user (admin) with platform roles. Requires admin.manage permission. Platform users are not tied to any specific tenant.'
+    description: 'Creates a platform-level user (admin) with a single platform role. Requires admin.manage permission. Platform users are not tied to any specific tenant.'
   })
   @ApiBody({
     schema: {
       type: 'object',
-      required: ['email', 'password'],
+      required: ['email', 'password', 'platformRole'],
       properties: {
         email: {
           type: 'string',
@@ -249,11 +258,10 @@ export class UsersController {
           example: 'Platform Admin',
           description: 'User display name (optional)'
         },
-        platformRoles: {
-          type: 'array',
-          items: { type: 'string' },
-          example: ['platform_admin'],
-          description: 'Platform roles for the user (optional, defaults to [])'
+        platformRole: {
+          type: 'string',
+          example: 'platform_admin',
+          description: 'Single platform role code (e.g., platform_admin, platform_moderator, viewer). Must exist in Role table.'
         }
       }
     }
@@ -283,22 +291,22 @@ export class UsersController {
       }
     }
   })
-  @ApiResponse({ status: 400, description: 'Invalid input or user already exists' })
+  @ApiResponse({ status: 400, description: 'Invalid input, user already exists, or role does not exist' })
   @ApiResponse({ status: 403, description: 'Insufficient permissions' })
   async createPlatformUser(@Body() dto: CreatePlatformUserDto) {
     return await this.users.createPlatformUser({
       email: dto.email,
       password: dto.password,
       displayName: dto.displayName ?? dto.email.split('@')[0],
-      platformRoles: dto.platformRoles ?? [],
+      platformRole: dto.platformRole, // Single role required
     });
   }
 
   /**
    * Bulk upload users from CSV file
    * Requires org_admin or tenant_admin role
-   * CSV Format: email, displayName, password (optional), roles (optional - pipe separated)
-   * Example: user@example.com, John Doe, myPassword123, learner|viewer
+   * CSV Format: email, displayName, password (optional), role (required - single role per user)
+   * Example: user@example.com, John Doe, myPassword123, learner
    */
   @UseGuards(JwtAuthGuard, PermissionGuard)
   @RequirePermission('users.create')
@@ -333,9 +341,9 @@ user3@example.com,Bob Johnson,SecurePass123,training_manager`
           format: 'binary',
           description: 'CSV file with user data'
         },
-        defaultRoles: {
+        defaultRole: {
           type: 'string',
-          description: 'Default roles if not specified in CSV (pipe-separated, e.g., "learner|viewer")',
+          description: 'Default role if not specified in CSV (e.g., \"learner\")',
           example: 'learner'
         }
       }
@@ -414,7 +422,7 @@ user3@example.com,Bob Johnson,SecurePass123,training_manager`
   @ApiResponse({ status: 413, description: 'File size exceeds 5MB limit' })
   async bulkUploadCsv(
     @UploadedFile() file: Express.Multer.File,
-    @Body() body: { defaultRoles?: string; tenantId?: string },
+    @Body() body: { defaultRole?: string; tenantId?: string },
     @Req() req: Request
   ) {
     if (!file) {
@@ -440,10 +448,8 @@ user3@example.com,Bob Johnson,SecurePass123,training_manager`
       throw new BadRequestException('Tenant ID is required for bulk user creation');
     }
 
-    // Parse default roles if provided
-    const defaultRoles = body.defaultRoles 
-      ? body.defaultRoles.split('|').map(r => r.trim()).filter(r => r)
-      : ['learner'];
+    // Get default role if provided, otherwise use 'learner'
+    const defaultRole = body.defaultRole || 'learner';
 
     // Convert file buffer to string
     const csvContent = file.buffer.toString('utf-8');
@@ -452,7 +458,7 @@ user3@example.com,Bob Johnson,SecurePass123,training_manager`
     const result = await this.users.bulkCreateUsersFromCsv(
       csvContent,
       tenantId,
-      defaultRoles
+      defaultRole
     );
 
     return {

@@ -43,8 +43,9 @@ export class PermissionGuard implements CanActivate {
       throw new ForbiddenException('User not found in request');
     }
 
-    // ✅ PLATFORM_ADMIN BYPASS - Has all permissions
+    // ✅ PLATFORM_ADMIN BYPASS - Has all permissions and can access any tenant
     if (user.roles?.includes('platform_admin')) {
+      // Platform admin: skip tenant and permission checks
       return true;
     }
 

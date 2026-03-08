@@ -26,6 +26,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { PermissionGuard } from '../common/guards/permission.guard';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { CreateLiveClassDto } from './dto/create-live-class.dto';
+import { AssignUsersToLiveClassDto } from './dto/assign-users.dto';
 import { TrackActivityDto, RecordLeaveDto, CalculateAttendanceDto } from './dto/attendance.dto';
 import type { Request as ExpressRequest } from 'express';
 import { JwtUser } from '../auth/types/jwt-user.interface';
@@ -45,9 +46,12 @@ export class LiveClassController {
    */
   private getTenantId(actor: JwtUser): string {
     if (!actor?.tenantId && !actor?.roles?.includes('platform_admin')) {
+      console.log(`   ✗ ERROR: User ${actor.id} has no tenant information`);
       throw new BadRequestException('No tenant information in token');
     }
-    return actor.tenantId || 'all'; // 'all' for platform_admin
+    const result = actor.tenantId || 'all'; // 'all' for platform_admin
+    console.log(`   🏢 Tenant ID: ${result} (User: ${actor.id})`);
+    return result;
   }
 
   /**
@@ -58,7 +62,7 @@ export class LiveClassController {
   }
 
   @UseGuards(JwtAuthGuard, PermissionGuard)
-  @RequirePermission('admin.manage')
+  @RequirePermission('live-classes.create')
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ 
@@ -74,7 +78,7 @@ Features:
 - Automatic capacity management
 
 Send tenantName instead of tenantId - the backend will automatically look up the tenant ID.
-Only training_manager and org_admin roles can create live classes.`
+Requires live-classes.create permission.`
   })
   @ApiResponse({ 
     status: 201, 
@@ -102,10 +106,19 @@ Only training_manager and org_admin roles can create live classes.`
     const actor = req.user as JwtUser;
     const tenantId = this.getTenantId(actor);
 
+    console.log('📚 Creating Live Class:');
+    console.log(`   👤 User ID: ${actor.id}`);
+    console.log(`   🏢 Tenant Name: ${dto.tenantName}`);
+    console.log(`   🎭 Roles: ${actor.roles?.join(', ')}`);
+    console.log(`   📝 Title: ${dto.title}`);
+    console.log('---');
+
     return this.liveClassService.createLiveClass(dto, actor.id, tenantId, actor.roles);
   }
 
   @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('live-classes.view')
   @Get(':liveClassId')
   @ApiOperation({ 
     summary: 'Get live class details',
@@ -156,7 +169,8 @@ Only training_manager and org_admin roles can create live classes.`
     return this.liveClassService.getLiveClass(liveClassId, actor.tenantId);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('live-classes.list')
   @Get()
   @ApiOperation({ 
     summary: 'List all live classes for tenant',
@@ -207,7 +221,7 @@ Only training_manager and org_admin roles can create live classes.`
   }
 
   @UseGuards(JwtAuthGuard, PermissionGuard)
-  @RequirePermission('admin.manage')
+  @RequirePermission('live-classes.start')
   @Post(':liveClassId/start')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ 
@@ -239,7 +253,7 @@ Only training_manager and org_admin roles can create live classes.`
   }
 
   @UseGuards(JwtAuthGuard, PermissionGuard)
-  @RequirePermission('admin.manage')
+  @RequirePermission('live-classes.end')
   @Post(':liveClassId/end')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ 
@@ -270,7 +284,8 @@ Only training_manager and org_admin roles can create live classes.`
     return this.liveClassService.endLiveClass(liveClassId, actor.id, actor.tenantId);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('live-classes.join')
   @Post(':liveClassId/join')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ 
@@ -315,7 +330,8 @@ Constraints:
     return this.liveClassService.joinLiveClass(liveClassId, actor.id, actor.tenantId);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PermissionGuard)
+  @RequirePermission('live-classes.leave')
   @Post(':liveClassId/leave')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ 
@@ -390,7 +406,7 @@ Constraints:
   }
 
   @UseGuards(JwtAuthGuard, PermissionGuard)
-  @RequirePermission('admin.manage')
+  @RequirePermission('live-classes.recording')
   @Post(':liveClassId/recording')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ 
@@ -541,7 +557,7 @@ Calculates:
   }
 
   @UseGuards(JwtAuthGuard, PermissionGuard)
-  @RequirePermission('admin.manage')
+  @RequirePermission('live-classes.attendance')
   @Post(':liveClassId/attendance/calculate-all')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -581,7 +597,7 @@ Typically called when:
   }
 
   @UseGuards(JwtAuthGuard, PermissionGuard)
-  @RequirePermission('admin.manage')
+  @RequirePermission('live-classes.attendance')
   @Get(':liveClassId/attendance/report')
   @ApiOperation({
     summary: 'Get attendance report for live class',
@@ -734,6 +750,175 @@ Typically called when:
       userId,
       courseId,
       actor.tenantId,
+    );
+  }
+
+  // ============================================================================
+  // User Assignment Endpoints
+  // ============================================================================
+
+  /**
+   * Get list of all users in the tenant that can be assigned to a live class
+   * This endpoint is used to populate user selection dropdowns/lists in the frontend
+   */
+  @UseGuards(JwtAuthGuard)
+  @Get(':liveClassId/available-users')
+  @ApiOperation({
+    summary: 'List all available users in tenant',
+    description: `Retrieves all active users in the tenant for user selection when assigning to a live class.
+    
+Returns:
+- User ID
+- Email
+- Display name
+- Tenant roles
+- Created date
+
+Useful for:
+- Populating user selection dropdowns
+- Bulk user assignment interface
+- User discovery for a live class`,
+  })
+  @ApiParam({ name: 'liveClassId', type: String, description: 'Live class ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of available users in tenant',
+    schema: {
+      example: {
+        total: 25,
+        users: [
+          {
+            id: 'user-1',
+            email: 'john@example.com',
+            displayName: 'John Doe',
+            roles: ['learner', 'trainer'],
+            createdAt: '2025-11-01T10:00:00Z',
+          },
+          {
+            id: 'user-2',
+            email: 'jane@example.com',
+            displayName: 'Jane Smith',
+            roles: ['learner'],
+            createdAt: '2025-11-02T10:00:00Z',
+          },
+        ],
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Live class not found' })
+  async listAvailableUsers(
+    @Param('liveClassId') liveClassId: string,
+    @Request() req: ExpressRequest,
+  ) {
+    // @ts-ignore
+    const actor = req.user as JwtUser;
+    if (!this.isPlatformAdmin(actor) && !actor?.tenantId) {
+      throw new BadRequestException('No tenant information in token');
+    }
+
+    // Verify the live class exists and belongs to the tenant
+    await this.liveClassService.getLiveClass(liveClassId, actor.tenantId);
+
+    return this.liveClassService.listTenantUsers(actor.tenantId);
+  }
+
+  /**
+   * Assign one or more users to a live class
+   * Bulk-add participants to a live class
+   * No specific permission required - any authenticated tenant user can assign
+   */
+  @UseGuards(JwtAuthGuard)
+  @Post(':liveClassId/assign-users')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Assign users to a live class',
+    description: `Bulk-add users as participants to a live class.
+    
+Features:
+- Add multiple users at once
+- Set role (participant or teacher) for all
+- Skip users already assigned
+- Respect class capacity limits
+- Validate users are active in the tenant
+
+Returns:
+- Number of users assigned
+- Number of users already assigned (skipped)
+- List of newly assigned participants`,
+  })
+  @ApiParam({ name: 'liveClassId', type: String, description: 'Live class ID' })
+  @ApiBody({
+    type: AssignUsersToLiveClassDto,
+    description: 'User IDs to assign and their role',
+    examples: {
+      example1: {
+        value: {
+          userIds: ['user-id-1', 'user-id-2', 'user-id-3'],
+          role: 'participant',
+        },
+        description: 'Assign multiple users as participants',
+      },
+      example2: {
+        value: {
+          userIds: ['teacher-id-1'],
+          role: 'teacher',
+        },
+        description: 'Assign a user as a teacher',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Users assigned successfully',
+    schema: {
+      example: {
+        liveClassId: '123e4567-e89b-12d3-a456-426614174000',
+        assigned: 3,
+        skipped: 0,
+        alreadyAssigned: [],
+        participants: [
+          {
+            id: 'participant-1',
+            userId: 'user-id-1',
+            role: 'participant',
+            joinedAt: '2025-11-20T14:00:00Z',
+          },
+          {
+            id: 'participant-2',
+            userId: 'user-id-2',
+            role: 'participant',
+            joinedAt: '2025-11-20T14:00:00Z',
+          },
+          {
+            id: 'participant-3',
+            userId: 'user-id-3',
+            role: 'participant',
+            joinedAt: '2025-11-20T14:00:00Z',
+          },
+        ],
+        message: 'Successfully assigned 3 user(s) to the live class',
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Invalid input or capacity exceeded' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  @ApiResponse({ status: 404, description: 'Live class not found' })
+  async assignUsersToLiveClass(
+    @Param('liveClassId') liveClassId: string,
+    @Body() dto: AssignUsersToLiveClassDto,
+    @Request() req: ExpressRequest,
+  ) {
+    // @ts-ignore
+    const actor = req.user as JwtUser;
+    if (!this.isPlatformAdmin(actor) && !actor?.tenantId) {
+      throw new BadRequestException('No tenant information in token');
+    }
+
+    return this.liveClassService.assignUsersToLiveClass(
+      liveClassId,
+      dto.userIds,
+      actor.tenantId,
+      dto.role || 'participant',
     );
   }
 }

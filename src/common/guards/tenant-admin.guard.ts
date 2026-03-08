@@ -14,6 +14,11 @@ export class TenantAdminGuard implements CanActivate {
 
     const { tenantId, roles } = user;
 
+    // PLATFORM_ADMIN BYPASS: allow access even if no tenantId
+    if (roles && Array.isArray(roles) && roles.includes('platform_admin')) {
+      return true;
+    }
+
     if (!tenantId) throw new ForbiddenException('User does not belong to any tenant');
 
     if (!roles || !Array.isArray(roles)) throw new ForbiddenException('User has no roles');

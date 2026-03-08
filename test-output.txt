@@ -1,0 +1,46 @@
+﻿Logging in...
+Getting lesson details...
+
+=== LESSON RESPONSE ===
+{
+    "id":  "8b428177-3c0c-426e-a23c-d4042629c7ed",
+    "moduleId":  "ee69c2f2-fd42-4c01-8ea7-1dc72d4777c2",
+    "title":  "Lesson 1",
+    "description":  null,
+    "videoUrl":  "https://iron-clad-lesson.s3.eu-north-1.amazonaws.com/videos/a835b1f0-0c05-4f29-809e-d2a56eaea857/8b428177-3c0c-426e-a23c-d4042629c7ed-1772895756280.mp4",
+    "videoDuration":  null,
+    "videoFileName":  "8b428177-3c0c-426e-a23c-d4042629c7ed-1772895756280.mp4",
+    "videoSummary":  "The video focuses on crucial cybersecurity architecture principles necessary for protecting an organization from cyber threats. It starts by emphasizing the importance of a robust cybersecurity posture in the wake of increasing cyber attacks. The speaker, an adjunct professor at NC State University, outlines the course structure which covers cybersecurity fundamentals and specific domains within cybersecurity. He introduces the concept of \u0027defense in depth\u0027, likening it to a castle\u0027s multiple layers of defense to protect against invaders, and applies this to modern digital systems by suggesting multiple security mechanisms like multi-factor authentication, mobile device management, firewalls, and encryption to ensure no single point of failure. The principle of least privilege is discussed, which involves granting users the minimum access necessary for their roles to minimize potential breaches. This principle also includes system hardening and regular access reviews to prevent \u0027privilege creep\u0027. Other principles covered include separation of duties to prevent unilateral control over sensitive operations, secure by design which integrates security from the early stages of system development, and the KISS principle, which advocates for simplicity to avoid creating overly complex systems that are hard to use and maintain. The video concludes by discrediting \u0027security by obscurity\u0027, warning against relying on secret methods for security, and promoting transparency and proven methods known to the security community.",
+    "displayOrder":  0,
+    "status":  "draft",
+    "createdAt":  "2026-03-07T14:19:12.894Z",
+    "updatedAt":  "2026-03-07T15:02:40.444Z",
+    "module":  {
+                   "id":  "ee69c2f2-fd42-4c01-8ea7-1dc72d4777c2",
+                   "courseId":  "a835b1f0-0c05-4f29-809e-d2a56eaea857",
+                   "title":  "Intro",
+                   "description":  null,
+                   "displayOrder":  0,
+                   "status":  "draft",
+                   "createdAt":  "2026-03-07T14:14:22.730Z",
+                   "updatedAt":  "2026-03-07T14:14:22.730Z",
+                   "course":  {
+                                  "id":  "a835b1f0-0c05-4f29-809e-d2a56eaea857",
+                                  "tenantId":  "47a36353-89d5-4f00-bd3b-e041cb5c278f",
+                                  "title":  "Cyber Security",
+                                  "summary":  "Introduction in cyber security",
+                                  "level":  "Advanced",
+                                  "status":  "draft",
+                                  "ownerUserId":  null,
+                                  "createdAt":  "2026-03-07T14:14:09.188Z",
+                                  "updatedAt":  "2026-03-07T14:14:09.188Z"
+                              }
+               },
+    "presignedVideoUrl":  null
+}
+
+=== KEY FIELDS ===
+Lesson Title: Lesson 1
+Video URL: https://iron-clad-lesson.s3.eu-north-1.amazonaws.com/videos/a835b1f0-0c05-4f29-809e-d2a56eaea857/8b428177-3c0c-426e-a23c-d4042629c7ed-1772895756280.mp4
+Video File Name: 8b428177-3c0c-426e-a23c-d4042629c7ed-1772895756280.mp4
+Presigned Video URL: 

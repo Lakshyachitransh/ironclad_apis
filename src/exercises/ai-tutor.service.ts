@@ -68,6 +68,131 @@ export class AITutorService {
   }
 
   /**
+   * Minify JSON by removing all unnecessary whitespace outside of string values
+   * This fixes issues with literal newlines in formatted JSON
+   */
+  private minifyJSON(jsonString: string): string {
+    let result = '';
+    let inString = false;
+    let escapeNext = false;
+
+    for (let i = 0; i < jsonString.length; i++) {
+      const char = jsonString[i];
+      const nextChar = jsonString[i + 1];
+
+      if (escapeNext) {
+        result += char;
+        escapeNext = false;
+        continue;
+      }
+
+      if (char === '\\' && inString) {
+        escapeNext = true;
+        result += char;
+        continue;
+      }
+
+      if (char === '"') {
+        inString = !inString;
+        result += char;
+        continue;
+      }
+
+      if (inString) {
+        // Inside strings, keep everything except actual newlines/tabs (but keep escaped versions)
+        // Replace literal control characters with their escape sequences
+        if (char === '\n') {
+          result += '\\n';
+        } else if (char === '\r') {
+          result += '\\r';
+        } else if (char === '\t') {
+          result += '\\t';
+        } else if (char.charCodeAt(0) < 32 && char !== '\t') {
+          // Skip other control characters
+          continue;
+        } else {
+          result += char;
+        }
+        continue;
+      }
+
+      // Outside strings, skip whitespace
+      if (/\s/.test(char)) {
+        continue;
+      }
+
+      result += char;
+    }
+
+    return result;
+  }
+
+  /**
+   * Sanitize JSON string by escaping control characters
+   * Handles unescaped newlines, tabs, and other control characters in string values
+   */
+  private sanitizeJSON(jsonString: string): string {
+    // First minify to remove formatting whitespace
+    return this.minifyJSON(jsonString);
+  }
+
+  /**
+   * Extract valid JSON from AI response, handling various formatting issues
+   */
+  private extractValidJSON(content: string): string | null {
+    // Remove optional markdown code block markers
+    let cleaned = content.replace(/```json\n?/g, '').replace(/```\n?/g, '');
+    cleaned = cleaned.trim();
+
+    // Try to find the first complete JSON object
+    let braceCount = 0;
+    let inString = false;
+    let escapeNext = false;
+    let jsonStart = -1;
+    let jsonEnd = -1;
+
+    for (let i = 0; i < cleaned.length; i++) {
+      const char = cleaned[i];
+
+      if (escapeNext) {
+        escapeNext = false;
+        continue;
+      }
+
+      if (char === '\\' && inString) {
+        escapeNext = true;
+        continue;
+      }
+
+      if (char === '"' && !escapeNext) {
+        inString = !inString;
+        continue;
+      }
+
+      if (!inString) {
+        if (char === '{') {
+          if (braceCount === 0) {
+            jsonStart = i;
+          }
+          braceCount++;
+        } else if (char === '}') {
+          braceCount--;
+          if (braceCount === 0 && jsonStart !== -1) {
+            jsonEnd = i;
+            break;
+          }
+        }
+      }
+    }
+
+    if (jsonStart !== -1 && jsonEnd !== -1) {
+      return cleaned.substring(jsonStart, jsonEnd + 1);
+    }
+
+    return null;
+  }
+
+  /**
    * Evaluate student code and provide AI-generated feedback
    */
   async evaluateCodeSubmission(params: {
@@ -244,7 +369,7 @@ Format: ["mistake1", "mistake2", ...]`;
 
       try {
         const content = completion.choices[0].message.content || '[]';
-        return JSON.parse(content);
+        return JSON.parse(this.sanitizeJSON(content));
       } catch (parseError) {
         return [];
       }
@@ -301,7 +426,7 @@ Be encouraging and constructive. Focus on learning.`;
       // Extract JSON from content
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
+        const parsed = JSON.parse(this.sanitizeJSON(jsonMatch[0]));
         return {
           isCorrect: parsed.isCorrect || false,
           score: parsed.score || 0,
@@ -412,28 +537,38 @@ Keep the answer concise and appropriate for their level.`;
     description?: string;
     programmingLanguage?: string;
   }): Promise<GeneratedExercise> {
-    const prompt = `Generate a ${params.difficulty} level programming exercise on the topic: "${params.topic}"
-Category: ${params.category}
-Language: ${params.programmingLanguage || 'JavaScript'}
+    const prompt = `You are an expert programming instructor. Generate a ${params.difficulty} level programming exercise.
 
-${params.description ? `Additional context: ${params.description}` : ''}
+TOPIC: "${params.topic}"
+CATEGORY: ${params.category}
+PROGRAMMING LANGUAGE: ${params.programmingLanguage || 'JavaScript'}
+${params.description ? `ADDITIONAL CONTEXT: ${params.description}` : ''}
 
-Return a JSON object with this exact structure (no markdown, pure JSON):
+CRITICAL INSTRUCTIONS:
+- Return ONLY a valid JSON object, no other text
+- Do not use markdown code blocks
+- Ensure all string values are properly escaped
+- Do not include any newlines inside string values
+- If you must include line breaks in strings, use \\n escape sequence
+
+Return EXACTLY this JSON structure:
 {
-  "title": "Exercise title",
-  "description": "What student will learn",
-  "instructions": "Step-by-step instructions",
-  "startingCode": "Initial code provided",
-  "expectedOutput": "What correct solution should produce",
+  "title": "Clear, concise exercise title",
+  "description": "What the student will learn in a few sentences",
+  "instructions": "Step-by-step instructions without newlines",
+  "startingCode": "Initial code template",
+  "expectedOutput": "Expected output from correct solution",
   "testCases": [
-    {"input": "example input", "expectedOutput": "expected output"},
-    {"input": "another input", "expectedOutput": "another output"}
+    {"input": "test input 1", "expectedOutput": "expected output 1"},
+    {"input": "test input 2", "expectedOutput": "expected output 2"}
   ],
   "highlightedSections": [
-    {"hint": "Hint 1", "explanation": "Explanation of what to fix"},
-    {"hint": "Hint 2", "explanation": "Another hint"}
+    {"hint": "First hint", "explanation": "Explanation of the hint"},
+    {"hint": "Second hint", "explanation": "Another hint"}
   ]
-}`;
+}
+
+Remember: Output ONLY the JSON object, no other text before or after.`;
 
     try {
       const completion = await this.openai.chat.completions.create({
@@ -452,20 +587,49 @@ Return a JSON object with this exact structure (no markdown, pure JSON):
         max_tokens: 1500,
       });
 
-      const content = completion.choices[0].message.content || '{}';
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const exercise = JSON.parse(jsonMatch[0]);
+      const content = completion.choices[0].message.content || '';
+      
+      if (!content) {
+        throw new Error('AI returned empty response');
+      }
+      
+      // Log the raw content for debugging
+      console.log('Raw AI response (first 500 chars):', content.substring(0, 500));
+      
+      // Extract JSON more carefully
+      const jsonStr = this.extractValidJSON(content);
+      if (!jsonStr) {
+        console.error('No valid JSON object found in response. Content:', content.substring(0, 500));
+        throw new Error('AI response does not contain valid JSON object');
+      }
+      
+      console.log('Extracted JSON (first 300 chars):', jsonStr.substring(0, 300));
+      
+      try {
+        // Sanitize and parse the JSON
+        const sanitized = this.sanitizeJSON(jsonStr);
+        const exercise = JSON.parse(sanitized);
+        
+        if (!exercise || typeof exercise !== 'object') {
+          throw new Error('Parsed JSON is not an object');
+        }
+        
         return {
           ...exercise,
           difficulty: params.difficulty,
         };
+      } catch (parseError) {
+        console.error('Failed to parse JSON:', {
+          error: parseError,
+          jsonLength: jsonStr.length,
+          jsonPreview: jsonStr.substring(0, 200),
+        });
+        throw parseError;
       }
-
-      throw new Error('Could not parse generated exercise');
     } catch (error) {
       console.error('Error generating exercise:', error);
-      throw new BadRequestException('Failed to generate exercise dynamically');
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      throw new BadRequestException('Failed to generate exercise: ' + errorMsg);
     }
   }
 
@@ -534,7 +698,7 @@ Return a JSON object with recommended topics to focus on next:
 
       const content = completion.choices[0].message.content || '{}';
       const jsonMatch = content.match(/\{[\s\S]*\}/);
-      const recommendedTopics = jsonMatch ? JSON.parse(jsonMatch[0]).recommendedTopics : [];
+      const recommendedTopics = jsonMatch ? JSON.parse(this.sanitizeJSON(jsonMatch[0])).recommendedTopics : [];
 
       return {
         totalExercises: params.submissions.length,
@@ -609,7 +773,7 @@ Analyze and provide JSON response:
       const content = completion.choices[0].message.content || '{}';
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
+        return JSON.parse(this.sanitizeJSON(jsonMatch[0]));
       }
 
       throw new Error('Could not parse comparison');
@@ -673,7 +837,7 @@ Provide debugging help as JSON:
       const content = completion.choices[0].message.content || '{}';
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
+        return JSON.parse(this.sanitizeJSON(jsonMatch[0]));
       }
 
       throw new Error('Could not parse debug solution');
@@ -795,7 +959,7 @@ Return as JSON array:
       const content = completion.choices[0].message.content || '[]';
       const jsonMatch = content.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
+        return JSON.parse(this.sanitizeJSON(jsonMatch[0]));
       }
 
       return [];
