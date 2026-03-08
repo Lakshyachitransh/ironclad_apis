@@ -1,0 +1,91 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: ironclad-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${DB_USER:-ironclad}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-ironclad_secure_password}
+      POSTGRES_DB: ${DB_NAME:-ironclad_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-ironclad}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ironclad-network
+
+  # NestJS Application
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ironclad-api
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      # Database
+      DATABASE_URL: postgresql://${DB_USER:-ironclad}:${DB_PASSWORD:-ironclad_secure_password}@postgres:5432/${DB_NAME:-ironclad_db}
+      
+      # JWT
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
+      JWT_EXPIRE_IN: ${JWT_EXPIRE_IN:-24h}
+      REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET:-your-refresh-secret-key}
+      REFRESH_TOKEN_EXPIRE_IN: ${REFRESH_TOKEN_EXPIRE_IN:-7d}
+      
+      # AWS S3
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET:-ironclad-videos}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      
+      # Node
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: 3000
+      
+      # Email (if configured)
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      
+      # Application
+      API_URL: ${API_URL:-http://localhost:3000}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3001}
+      
+      # AWS Transcribe (if using video transcription)
+      AWS_TRANSCRIBE_ROLE_ARN: ${AWS_TRANSCRIBE_ROLE_ARN}
+      
+      # OpenAI (if using AI features)
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    
+    depends_on:
+      postgres:
+        condition: service_healthy
+    
+    volumes:
+      - ./src:/app/src:ro
+    
+    networks:
+      - ironclad-network
+    
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/health', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  ironclad-network:
+    driver: bridge

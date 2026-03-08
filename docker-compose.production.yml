@@ -1,0 +1,106 @@
+version: '3.8'
+
+# Production-ready docker-compose configuration
+# For AWS EC2 deployment with managed database
+
+services:
+  # NestJS API Application
+  api:
+    image: ironclad-api:latest
+    container_name: ironclad-api
+    restart: always
+    ports:
+      - "3000:3000"
+    
+    environment:
+      # Database - Use RDS connection string
+      DATABASE_URL: ${DATABASE_URL}
+      
+      # JWT Secrets
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRE_IN: ${JWT_EXPIRE_IN}
+      REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET}
+      REFRESH_TOKEN_EXPIRE_IN: ${REFRESH_TOKEN_EXPIRE_IN}
+      
+      # AWS S3
+      AWS_REGION: ${AWS_REGION}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      
+      # Node
+      NODE_ENV: production
+      PORT: 3000
+      
+      # URLs
+      API_URL: ${API_URL}
+      FRONTEND_URL: ${FRONTEND_URL}
+      
+      # Email
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Ironclad LMS}
+      
+      # OpenAI
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      
+      # Logging
+      LOG_LEVEL: info
+      
+      # Rate limiting
+      RATE_LIMIT_WINDOW_MS: 60000
+      RATE_LIMIT_MAX_REQUESTS: 100
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/health', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    networks:
+      - ironclad-network
+
+  # Optional: Redis for caching
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: ironclad-redis
+  #   restart: always
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis_data:/data
+  #   networks:
+  #     - ironclad-network
+  #   command: redis-server --appendonly yes
+
+volumes:
+  # redis_data:
+  #   driver: local
+
+networks:
+  ironclad-network:
+    driver: bridge
+
+# Usage:
+# docker-compose -f docker-compose.production.yml up -d
